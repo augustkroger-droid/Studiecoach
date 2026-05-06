@@ -25,10 +25,13 @@ type StudyPost = {
     duration: number;
     date: string;
     comment: string | null;
+    rating?: number | null;
     created_at: string;
     profiles?: {
         username: string;
     };
+    post_type?: string;
+    title?: string | null;
 };
 
 type Like = {
@@ -159,11 +162,14 @@ export default function PeppPage() {
     }
 
     async function loadPosts() {
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
         const { data, error } = await supabase
             .from("study_posts")
             .select("*")
+            .gte("date", oneWeekAgo.toISOString().split("T")[0])
             .order("created_at", { ascending: false });
-
         if (error) {
             alert(error.message);
             return;
@@ -331,6 +337,25 @@ export default function PeppPage() {
         return profiles.find((profile) => profile.id === profileId)?.username || "Okänd";
     }
 
+    async function deletePost(postId: string) {
+        const confirmed = window.confirm("Vill du ta bort detta inlägg?");
+        if (!confirmed) return;
+
+        const { error } = await supabase
+            .from("study_posts")
+            .delete()
+            .eq("id", postId)
+            .eq("user_id", userId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        loadPosts();
+        loadLikes();
+    }
+
     const acceptedFriendIds = friendRequests
         .filter((request) => request.status === "accepted")
         .map((request) =>
@@ -408,7 +433,7 @@ export default function PeppPage() {
 
                         {posts.length === 0 ? (
                             <p style={{ color: "#94a3b8" }}>
-                                Inga postade studiepass ännu.
+                                Inga postade studiepass senaste veckan.
                             </p>
                         ) : (
                             posts.map((post) => {
@@ -416,7 +441,36 @@ export default function PeppPage() {
                                 const likedByMe = postLikes.some((like) => like.user_id === userId);
 
                                 return (
-                                    <article key={post.id} style={postCardStyle}>
+                                    <article
+                                        key={post.id}
+                                        style={{
+                                            ...postCardStyle,
+                                            position: "relative",
+                                            paddingBottom: "70px",
+                                        }}
+                                    >
+                                        {post.user_id === userId && (
+                                            <button
+                                                onClick={() => deletePost(post.id)}
+                                                style={{
+                                                    position: "absolute",
+                                                    top: "18px",
+                                                    right: "18px",
+                                                    width: "34px",
+                                                    height: "34px",
+                                                    borderRadius: "999px",
+                                                    border: "1px solid rgba(248, 113, 113, 0.45)",
+                                                    background: "rgba(239, 68, 68, 0.12)",
+                                                    color: "#fecaca",
+                                                    cursor: "pointer",
+                                                    fontWeight: "bold",
+                                                    fontSize: "18px",
+                                                }}
+                                                title="Ta bort inlägg"
+                                            >
+                                                ✕
+                                            </button>
+                                        )}
                                         <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
                                             <div>
                                                 <h3 style={{ margin: 0 }}>
@@ -424,14 +478,54 @@ export default function PeppPage() {
                                                 </h3>
 
                                                 <p style={{ margin: "8px 0 0", color: "#cbd5e1", fontWeight: "bold" }}>
-                                                    Studerade {post.subject || "ett ämne"} i {formatHours(post.duration)}
+                                                    {post.post_type === "weekly_goal"
+                                                        ? post.title
+                                                        : `Studerade ${post.subject || "ett ämne"} i ${formatHours(post.duration)}`}
                                                 </p>
+
+                                                {post.rating && (
+                                                    <div style={{ marginTop: "8px", display: "flex", gap: "3px" }}>
+                                                        {[1, 2, 3, 4, 5].map((star) => (
+                                                            <span
+                                                                key={star}
+                                                                style={{
+                                                                    color: star <= post.rating! ? "#fbbf24" : "rgba(148, 163, 184, 0.35)",
+                                                                    fontSize: "19px",
+                                                                    lineHeight: 1,
+                                                                }}
+                                                            >
+                                                                ★
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
 
                                                 <p style={{ margin: "6px 0 0", color: "#94a3b8", fontSize: "14px" }}>
                                                     {formatDate(post.date)}
                                                 </p>
                                             </div>
+                                        </div>
 
+                                        {post.comment && (
+                                            <p
+                                                style={{
+                                                    margin: "14px 0 0",
+                                                    padding: "12px",
+                                                    borderRadius: "12px",
+                                                    background: "rgba(15, 23, 42, 0.75)",
+                                                    color: "#e2e8f0",
+                                                }}
+                                            >
+                                                “{post.comment}”
+                                            </p>
+                                        )}
+                                        <div
+                                            style={{
+                                                position: "absolute",
+                                                bottom: "18px",
+                                                right: "18px",
+                                            }}
+                                        >
                                             <button
                                                 onClick={() => toggleLike(post.id)}
                                                 style={{
@@ -452,20 +546,6 @@ export default function PeppPage() {
                                                 ❤️ {postLikes.length}
                                             </button>
                                         </div>
-
-                                        {post.comment && (
-                                            <p
-                                                style={{
-                                                    margin: "14px 0 0",
-                                                    padding: "12px",
-                                                    borderRadius: "12px",
-                                                    background: "rgba(15, 23, 42, 0.75)",
-                                                    color: "#e2e8f0",
-                                                }}
-                                            >
-                                                “{post.comment}”
-                                            </p>
-                                        )}
                                     </article>
                                 );
                             })

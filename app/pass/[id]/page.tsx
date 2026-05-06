@@ -167,6 +167,7 @@ export default function PassPage() {
     const [extraMinutes, setExtraMinutes] = useState(10);
     const [showPostPopup, setShowPostPopup] = useState(false);
     const [postComment, setPostComment] = useState("");
+    const [postRating, setPostRating] = useState(0);
     const [finishedSession, setFinishedSession] = useState<any>(null);
     const [showTimerDoneAnimation, setShowTimerDoneAnimation] = useState(false);
     const [data, setData] = useState<PlanningData>(() => defaultPlanningData());
@@ -389,20 +390,15 @@ export default function PassPage() {
     function openEndModal(actualMinutes: number) {
         setIsRunning(false);
         setPendingActualMinutes(actualMinutes);
-        setEndReviewDraft(data.endReview);
-        setShowEndModal(true);
+        completeSession(actualMinutes);
     }
 
-    async function completeSession(reviewToSave = endReviewDraft) {
-        if (!id || pendingActualMinutes === null) return;
+    async function completeSession(actualMinutes: number) {
+        if (!id) return;
 
-        const nextData = {
-            ...data,
-            endReview: reviewToSave,
-        };
+        const nextData = data;
 
         setData(nextData);
-        setShowEndModal(false);
         setIsRunning(false);
 
         await supabase
@@ -411,7 +407,7 @@ export default function PassPage() {
                 planning_data: nextData,
                 planning: nextData.goal,
                 status: "done",
-                duration: pendingActualMinutes,
+                duration: actualMinutes,
                 remaining_seconds: null,
             })
             .eq("id", id);
@@ -427,7 +423,7 @@ export default function PassPage() {
         setFinishedSession({
             id,
             subject: sessionFromDb?.subject || nextData.goal || "Studiepass",
-            duration: pendingActualMinutes,
+            duration: actualMinutes,
             date: sessionFromDb?.date || new Date().toISOString().split("T")[0],
         });
 
@@ -735,6 +731,7 @@ export default function PassPage() {
             duration: finishedSession.duration,
             date: finishedSession.date,
             comment: postComment || null,
+            rating: postRating || null,
         });
 
         if (error) {
@@ -744,6 +741,7 @@ export default function PassPage() {
 
         setShowPostPopup(false);
         setPostComment("");
+        setPostRating(0);
         setFinishedSession(null);
 
         window.location.href = "/pepp";
@@ -752,6 +750,7 @@ export default function PassPage() {
     function skipPosting() {
         setShowPostPopup(false);
         setPostComment("");
+        setPostRating(0);
         setFinishedSession(null);
 
         window.location.href = "/kalender";
@@ -1651,124 +1650,7 @@ export default function PassPage() {
                 </div>
             )}
 
-            {showEndModal && (
-                <div
-                    style={{
-                        position: "fixed",
-                        inset: 0,
-                        background: "rgba(2, 6, 23, 0.78)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        zIndex: 50,
-                        padding: "24px",
-                    }}
-                >
-                    <div
-                        style={{
-                            width: "560px",
-                            maxWidth: "calc(100vw - 48px)",
-                            background: "#0f172a",
-                            border: "1px solid rgba(148, 163, 184, 0.25)",
-                            borderRadius: "20px",
-                            boxShadow: "0 24px 80px rgba(0,0,0,0.5)",
-                            padding: "22px",
-                        }}
-                    >
 
-                        <p style={{ color: "#cbd5e1" }}>
-                            Svara kort på frågorna. Informationen sparas i passets planering och kan visas på andra sidor.
-                        </p>
-
-                        <div style={{ marginBottom: "16px" }}>
-                            <div style={{ color: "#94a3b8", marginBottom: "8px" }}>
-                                Hur bra förstår du innehållet nu?
-                            </div>
-
-                            <div style={{ display: "flex", gap: "6px" }}>
-                                {[1, 2, 3, 4, 5].map((star) => (
-                                    <button
-                                        key={star}
-                                        onClick={() =>
-                                            setEndReviewDraft({ ...endReviewDraft, rating: star })
-                                        }
-                                        style={{
-                                            background: "transparent",
-                                            border: 0,
-                                            cursor: "pointer",
-                                            fontSize: "32px",
-                                        }}
-                                        type="button"
-                                    >
-                                        {star <= endReviewDraft.rating ? "⭐" : "☆"}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <label style={{ color: "#cbd5e1" }}>Vad gick bra?</label>
-                        <textarea
-                            value={endReviewDraft.wentWell}
-                            onChange={(event) =>
-                                setEndReviewDraft({ ...endReviewDraft, wentWell: event.target.value })
-                            }
-                            rows={2}
-                            style={{ ...inputStyle, margin: "6px 0 12px", resize: "vertical" }}
-                        />
-
-                        <label style={{ color: "#cbd5e1" }}>Vad var svårt?</label>
-                        <textarea
-                            value={endReviewDraft.difficult}
-                            onChange={(event) =>
-                                setEndReviewDraft({ ...endReviewDraft, difficult: event.target.value })
-                            }
-                            rows={2}
-                            style={{ ...inputStyle, margin: "6px 0 12px", resize: "vertical" }}
-                        />
-
-                        <label style={{ color: "#cbd5e1" }}>Vad ska jag fokusera på nästa gång?</label>
-                        <textarea
-                            value={endReviewDraft.nextFocus}
-                            onChange={(event) =>
-                                setEndReviewDraft({ ...endReviewDraft, nextFocus: event.target.value })
-                            }
-                            rows={2}
-                            style={{ ...inputStyle, margin: "6px 0 16px", resize: "vertical" }}
-                        />
-
-                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-                            <button
-                                onClick={() =>
-                                    completeSession({
-                                        rating: 0,
-                                        wentWell: "",
-                                        difficult: "",
-                                        nextFocus: "",
-                                    })
-                                }
-                                style={smallButton}
-                                type="button"
-                            >
-                                Hoppa över
-                            </button>
-
-                            <button
-                                onClick={() => completeSession(endReviewDraft)}
-                                style={{
-                                    ...smallButton,
-                                    background: "linear-gradient(90deg,#16a34a,#22c55e)",
-                                    color: "white",
-                                    border: "none",
-                                    padding: "10px 16px",
-                                }}
-                                type="button"
-                            >
-                                Spara och avsluta
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {showPostPopup && finishedSession && (
                 <div
@@ -1785,8 +1667,9 @@ export default function PassPage() {
                     <div
                         style={{
                             width: "360px",
-                            background: "#ffffff",
-                            color: "#111827",
+                            background: "#0f172a",
+                            color: "#e2e8f0",
+                            border: "1px solid rgba(148, 163, 184, 0.25)",
                             borderRadius: "18px",
                             padding: "24px",
                             boxShadow: "0 24px 60px rgba(0,0,0,0.35)",
@@ -1805,11 +1688,43 @@ export default function PassPage() {
                             style={{
                                 padding: "12px",
                                 borderRadius: "12px",
-                                background: "#f1f5f9",
+                                background: "rgba(30, 41, 59, 0.85)",
                                 fontWeight: "bold",
                             }}
                         >
                             {finishedSession.subject} – {finishedSession.duration} min
+                        </div>
+                        <div>
+                            <div style={{ fontWeight: "bold", marginBottom: "6px" }}>
+                                Hur kändes passet?
+                            </div>
+
+                            <div style={{ display: "flex", gap: "4px" }}>
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                    <button
+                                        key={star}
+                                        onClick={() => setPostRating(star)}
+                                        style={{
+                                            background: "transparent",
+                                            border: 0,
+                                            cursor: "pointer",
+                                            fontSize: "34px",
+                                            padding: 0,
+                                            lineHeight: 1,
+                                        }}
+                                        type="button"
+                                    >
+                                        <span
+                                            style={{
+                                                color: star <= postRating ? "#fbbf24" : "#cbd5e1",
+                                                transition: "0.15s",
+                                            }}
+                                        >
+                                            ★
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         <textarea
@@ -1820,7 +1735,9 @@ export default function PassPage() {
                                 minHeight: "90px",
                                 padding: "12px",
                                 borderRadius: "12px",
-                                border: "1px solid #cbd5e1",
+                                border: "1px solid rgba(148, 163, 184, 0.35)",
+                                background: "rgba(2, 6, 23, 0.75)",
+                                color: "#e2e8f0",
                                 resize: "vertical",
                                 fontFamily: "Arial, sans-serif",
                             }}
@@ -1847,8 +1764,8 @@ export default function PassPage() {
                                 padding: "12px",
                                 borderRadius: "12px",
                                 border: "1px solid #cbd5e1",
-                                background: "#f8fafc",
-                                color: "#111827",
+                                background: "rgba(15, 23, 42, 0.75)",
+                                color: "#e2e8f0",
                                 fontWeight: "bold",
                                 cursor: "pointer",
                             }}

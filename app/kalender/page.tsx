@@ -634,11 +634,11 @@ export default function KalenderPage() {
         return {
             padding: "10px 14px",
             borderRadius: "10px",
-            border: "none",
+            border: primary ? "none" : "1px solid rgba(148, 163, 184, 0.3)",
             cursor: "pointer",
             fontWeight: "bold",
-            background: primary ? "#2563eb" : "#e5e7eb",
-            color: primary ? "white" : "#111",
+            background: primary ? "#2563eb" : "rgba(30, 41, 59, 0.85)",
+            color: "#e2e8f0",
         };
     }
 
@@ -646,11 +646,11 @@ export default function KalenderPage() {
         return {
             padding: "14px",
             borderRadius: "12px",
-            border: danger ? "none" : "1px solid #cbd5e1",
+            border: danger ? "none" : "1px solid rgba(148, 163, 184, 0.3)",
             cursor: "pointer",
             fontWeight: "bold",
-            background: danger ? "#ef4444" : "#f8fafc",
-            color: danger ? "white" : "#111827",
+            background: danger ? "#ef4444" : "rgba(30, 41, 59, 0.85)",
+            color: "#e2e8f0",
             textAlign: "center" as const,
         };
     }
@@ -667,6 +667,45 @@ export default function KalenderPage() {
         return dateString < todayString;
     }
 
+    async function postWeeklyGoalCompleted() {
+        const { data: userData } = await supabase.auth.getUser();
+        const user = userData.user;
+
+        if (!user) return;
+
+        const weekStart = getCurrentWeekStartString();
+
+        const { data: existingPost } = await supabase
+            .from("study_posts")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("post_type", "weekly_goal")
+            .eq("date", weekStart)
+            .maybeSingle();
+
+        if (existingPost) {
+            alert("Du har redan postat veckomålet den här veckan.");
+            return;
+        }
+
+        const { error } = await supabase.from("study_posts").insert({
+            user_id: user.id,
+            post_type: "weekly_goal",
+            title: `klarade sitt veckomål: ${formatStudyTime(weeklyGoalMinutes)} 🎯`,
+            subject: "Veckomål",
+            duration: studiedMinutesThisWeek,
+            date: weekStart,
+            comment: null,
+        });
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        alert("Veckomålet postades på Pepp!");
+    }
+
     function isToday(dateString: string) {
         return dateString === formatDate(new Date());
     }
@@ -674,6 +713,7 @@ export default function KalenderPage() {
     const upcomingExams = [...exams]
         .filter((exam) => !isBeforeToday(exam.date))
         .sort((a, b) => a.date.localeCompare(b.date));
+
     const popupOpen = selectedDate || selectedSession || selectedExam;
 
     const doneSessionsThisWeek = sessions.filter(
@@ -684,6 +724,10 @@ export default function KalenderPage() {
         (sum, session) => sum + session.duration,
         0
     );
+
+    const weeklyGoalCompleted =
+        weeklyGoalMinutes > 0 &&
+        studiedMinutesThisWeek >= weeklyGoalMinutes;
 
     const weeklyGoalPercent =
         weeklyGoalMinutes === 0
@@ -957,11 +1001,8 @@ export default function KalenderPage() {
             <div
                 style={{
                     position: "fixed",
-                    right: "24px",
+                    left: "80px",
                     bottom: "20px",
-                    display: "flex",
-                    alignItems: "flex-end",
-                    gap: "16px",
                     zIndex: 20,
                 }}
             >
@@ -1052,11 +1093,34 @@ export default function KalenderPage() {
                             <p style={{ color: "#94a3b8", margin: "8px 0 0", fontSize: "13px" }}>
                                 {weeklyGoalPercent}% av veckomålet
                             </p>
+
+                            {weeklyGoalCompleted && (
+                                <button
+                                    onClick={postWeeklyGoalCompleted}
+                                    style={{
+                                        marginTop: "14px",
+                                        width: "100%",
+                                        padding: "12px",
+                                        borderRadius: "12px",
+                                        border: "none",
+                                        background: "#16a34a",
+                                        color: "white",
+                                        fontWeight: "bold",
+                                        cursor: "pointer",
+                                        fontSize: "15px",
+                                    }}
+                                >
+                                    🎉 Posta att du klarat veckomålet
+                                </button>
+                            )}
                         </div>
                     )}
                 </section>
                 <aside
                     style={{
+                        position: "fixed",
+                        right: "24px",
+                        bottom: "20px",
                         width: "330px",
                         maxHeight: "48vh",
                         overflowY: "auto",
@@ -1156,16 +1220,16 @@ export default function KalenderPage() {
                     <div
                         onClick={(e) => e.stopPropagation()}
                         style={{
-                            background: "#ffffff",
-                            color: "#111",
+                            background: "#0f172a",
+                            color: "#e2e8f0",
                             padding: "24px",
-                            borderRadius: "16px",
+                            borderRadius: "18px",
                             width: "340px",
-                            boxShadow: "0 20px 40px rgba(0,0,0,0.3)",
+                            boxShadow: "0 24px 80px rgba(0,0,0,0.55)",
                             display: "flex",
                             flexDirection: "column",
                             gap: "12px",
-                            border: "1px solid rgba(15, 23, 42, 0.08)",
+                            border: "1px solid rgba(148, 163, 184, 0.25)",
                         }}
                     >
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1180,7 +1244,21 @@ export default function KalenderPage() {
                                                 ? "Lägg till studiepass"
                                                 : "Vad vill du lägga till?"}
                             </h2>
-                            <button onClick={closePopup}>✕</button>
+                            <button
+                                onClick={closePopup}
+                                style={{
+                                    width: "32px",
+                                    height: "32px",
+                                    borderRadius: "999px",
+                                    border: "1px solid rgba(148, 163, 184, 0.35)",
+                                    background: "rgba(15, 23, 42, 0.75)",
+                                    color: "#e2e8f0",
+                                    cursor: "pointer",
+                                    fontWeight: "bold",
+                                }}
+                            >
+                                ✕
+                            </button>
                         </div>
 
                         {selectedDate && !selectedSession && !selectedExam && !popupMode && (
@@ -1227,21 +1305,42 @@ export default function KalenderPage() {
                                             placeholder="Ämne"
                                             value={subject}
                                             onChange={(e) => setSubject(e.target.value)}
-                                            style={{ padding: "12px", borderRadius: "10px", border: "1px solid #cbd5e1" }}
+                                            style={{
+                                                padding: "12px",
+                                                borderRadius: "10px",
+                                                border: "1px solid rgba(148, 163, 184, 0.35)",
+                                                background: "rgba(2, 6, 23, 0.75)",
+                                                color: "#e2e8f0",
+                                                outline: "none",
+                                            }}
                                         />
 
                                         <input
                                             placeholder="Minuter"
                                             value={minutes}
                                             onChange={(e) => setMinutes(e.target.value)}
-                                            style={{ padding: "12px", borderRadius: "10px", border: "1px solid #cbd5e1" }}
+                                            style={{
+                                                padding: "12px",
+                                                borderRadius: "10px",
+                                                border: "1px solid rgba(148, 163, 184, 0.35)",
+                                                background: "rgba(2, 6, 23, 0.75)",
+                                                color: "#e2e8f0",
+                                                outline: "none",
+                                            }}
                                         />
 
                                         <input
                                             type="time"
                                             value={startTime}
                                             onChange={(e) => setStartTime(e.target.value)}
-                                            style={{ padding: "12px", borderRadius: "10px", border: "1px solid #cbd5e1" }}
+                                            style={{
+                                                padding: "12px",
+                                                borderRadius: "10px",
+                                                border: "1px solid rgba(148, 163, 184, 0.35)",
+                                                background: "rgba(2, 6, 23, 0.75)",
+                                                color: "#e2e8f0",
+                                                outline: "none",
+                                            }}
                                         />
                                     </>
                                 )}
@@ -1369,14 +1468,28 @@ export default function KalenderPage() {
                                             placeholder="Provnamn"
                                             value={examName}
                                             onChange={(e) => setExamName(e.target.value)}
-                                            style={{ padding: "12px", borderRadius: "10px", border: "1px solid #cbd5e1" }}
+                                            style={{
+                                                padding: "12px",
+                                                borderRadius: "10px",
+                                                border: "1px solid rgba(148, 163, 184, 0.35)",
+                                                background: "rgba(2, 6, 23, 0.75)",
+                                                color: "#e2e8f0",
+                                                outline: "none",
+                                            }}
                                         />
 
                                         <input
                                             type="date"
                                             value={examDate}
                                             onChange={(e) => setExamDate(e.target.value)}
-                                            style={{ padding: "12px", borderRadius: "10px", border: "1px solid #cbd5e1" }}
+                                            style={{
+                                                padding: "12px",
+                                                borderRadius: "10px",
+                                                border: "1px solid rgba(148, 163, 184, 0.35)",
+                                                background: "rgba(2, 6, 23, 0.75)",
+                                                color: "#e2e8f0",
+                                                outline: "none",
+                                            }}
                                         />
 
                                         <div>
@@ -1390,7 +1503,7 @@ export default function KalenderPage() {
                                                         style={{
                                                             height: "34px",
                                                             borderRadius: "999px",
-                                                            border: examColor === color.value ? "3px solid #111827" : "2px solid #e5e7eb",
+                                                            border: examColor === color.value ? "3px solid #e2e8f0" : "2px solid rgba(226, 232, 240, 0.35)",
                                                             background: color.value,
                                                             cursor: "pointer",
                                                         }}
