@@ -13,35 +13,22 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   async function signUp() {
-    if (!email || !password || !username) {
-      alert("Fyll i e-post, lösenord och användarnamn.");
-      return;
-    }
-
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          username,
+        },
+      },
     });
 
     if (error) {
-      setLoading(false);
       alert(error.message);
+      setLoading(false);
       return;
-    }
-
-    if (data.user) {
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert({
-          id: data.user.id,
-          username,
-        });
-
-      if (profileError) {
-        alert(profileError.message);
-      }
     }
 
     setLoading(false);
