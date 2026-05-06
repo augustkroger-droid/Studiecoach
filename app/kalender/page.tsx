@@ -1030,7 +1030,7 @@ export default function KalenderPage() {
                             value={goalHours}
                             onChange={(e) => setGoalHours(e.target.value)}
                             style={{
-                                width: "90px",
+                                width: "100px",
                                 padding: "12px",
                                 borderRadius: "12px",
                                 border: "1px solid rgba(148, 163, 184, 0.35)",

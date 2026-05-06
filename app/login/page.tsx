@@ -13,6 +13,21 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   async function signUp() {
+    if (!username.trim()) {
+      alert("Du måste välja ett användarnamn.");
+      return;
+    }
+
+    if (username.trim().length < 3) {
+      alert("Användarnamnet måste vara minst 3 tecken.");
+      return;
+    }
+
+    if (!email || !password) {
+      alert("Fyll i e-post och lösenord.");
+      return;
+    }
+
     setLoading(true);
 
     const { error } = await supabase.auth.signUp({
@@ -20,7 +35,7 @@ export default function LoginPage() {
       password,
       options: {
         data: {
-          username,
+          username: username.trim(),
         },
       },
     });
@@ -114,6 +129,7 @@ export default function LoginPage() {
           <input
             placeholder="Användarnamn"
             value={username}
+            maxLength={20}
             onChange={(e) => setUsername(e.target.value)}
             style={inputStyle}
           />
