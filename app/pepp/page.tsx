@@ -1,0 +1,700 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import NavBar from "@/components/NavBar";
+import { supabase } from "@/lib/supabase";
+
+type Profile = {
+    id: string;
+    username: string;
+    show_on_leaderboard?: boolean;
+};
+
+type FriendRequest = {
+    id: string;
+    from_user_id: string;
+    to_user_id: string;
+    status: "pending" | "accepted";
+};
+
+type StudyPost = {
+    id: string;
+    user_id: string;
+    study_session_id: string | null;
+    subject: string;
+    duration: number;
+    date: string;
+    comment: string | null;
+    created_at: string;
+    profiles?: {
+        username: string;
+    };
+};
+
+type Like = {
+    id: string;
+    post_id: string;
+    user_id: string;
+};
+
+function formatHours(minutes: number) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+
+    if (hours > 0 && mins > 0) return `${hours} h ${mins} min`;
+    if (hours > 0) return `${hours} h`;
+    return `${mins} min`;
+}
+
+function formatDate(dateString: string) {
+    const [year, month, day] = dateString.split("-");
+    return `${day}/${month}/${year}`;
+}
+
+function getStartOfWeek() {
+    const today = new Date();
+    const day = today.getDay();
+    const diff = (day === 0 ? -6 : 1) - day;
+
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diff);
+    monday.setHours(0, 0, 0, 0);
+
+    return monday;
+}
+
+function toDateString(date: Date) {
+    return [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, "0"),
+        String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+}
+
+export default function PeppPage() {
+    const [userId, setUserId] = useState("");
+    const [myProfile, setMyProfile] = useState<Profile | null>(null);
+    const [showOnLeaderboard, setShowOnLeaderboard] = useState(true);
+
+    const [posts, setPosts] = useState<StudyPost[]>([]);
+    const [likes, setLikes] = useState<Like[]>([]);
+    const [profiles, setProfiles] = useState<Profile[]>([]);
+    const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+
+    const [searchUsername, setSearchUsername] = useState("");
+    const [searchResults, setSearchResults] = useState<Profile[]>([]);
+
+    const [goalHours, setGoalHours] = useState("");
+    const [weeklyGoalMinutes, setWeeklyGoalMinutes] = useState(0);
+
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        loadEverything();
+    }, []);
+
+    async function loadEverything() {
+        const { data: userData } = await supabase.auth.getUser();
+        const user = userData.user;
+
+        if (!user) {
+            window.location.href = "/login";
+            return;
+        }
+
+        setUserId(user.id);
+
+        const { data: profileData } = await supabase
+            .from("profiles")
+            .select("id, username, show_on_leaderboard")
+            .eq("id", user.id)
+            .single();
+
+        setMyProfile(profileData);
+        setShowOnLeaderboard(profileData?.show_on_leaderboard ?? false);
+
+        await Promise.all([
+            loadFriendRequests(user.id),
+            loadPosts(),
+            loadLikes(),
+            loadWeeklyGoal(user.id),
+        ]);
+
+        setLoading(false);
+    }
+
+    async function loadFriendRequests(currentUserId: string) {
+        const { data, error } = await supabase
+            .from("friend_requests")
+            .select("*")
+            .or(`from_user_id.eq.${currentUserId},to_user_id.eq.${currentUserId}`);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setFriendRequests(data || []);
+
+        const userIds = new Set<string>();
+
+        (data || []).forEach((request) => {
+            userIds.add(request.from_user_id);
+            userIds.add(request.to_user_id);
+        });
+
+        userIds.add(currentUserId);
+
+        const postUserIds = posts.map((post) => post.user_id);
+        postUserIds.forEach((id) => userIds.add(id));
+
+        if (userIds.size > 0) {
+            const { data: profileData } = await supabase
+                .from("profiles")
+                .select("id, username, show_on_leaderboard")
+                .in("id", Array.from(userIds));
+
+            setProfiles(profileData || []);
+        }
+    }
+
+    async function loadPosts() {
+        const { data, error } = await supabase
+            .from("study_posts")
+            .select("*")
+            .order("created_at", { ascending: false });
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setPosts(data || []);
+    }
+
+    async function loadLikes() {
+        const { data, error } = await supabase
+            .from("post_likes")
+            .select("*");
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setLikes(data || []);
+    }
+
+    async function loadWeeklyGoal(currentUserId: string) {
+        const weekStart = toDateString(getStartOfWeek());
+
+        const { data } = await supabase
+            .from("weekly_goals")
+            .select("*")
+            .eq("user_id", currentUserId)
+            .eq("week_start", weekStart)
+            .maybeSingle();
+
+        if (data) {
+            setWeeklyGoalMinutes(data.goal_minutes);
+            setGoalHours(String(data.goal_minutes / 60));
+        }
+    }
+
+    async function saveWeeklyGoal() {
+        if (!goalHours) return;
+
+        const weekStart = toDateString(getStartOfWeek());
+        const minutes = Math.round(Number(goalHours) * 60);
+
+        const { error } = await supabase
+            .from("weekly_goals")
+            .upsert({
+                user_id: userId,
+                week_start: weekStart,
+                goal_minutes: minutes,
+            }, {
+                onConflict: "user_id,week_start",
+            });
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setWeeklyGoalMinutes(minutes);
+    }
+
+    async function searchUsers() {
+        if (!searchUsername.trim()) return;
+
+        const { data, error } = await supabase
+            .from("profiles")
+            .select("id, username, show_on_leaderboard")
+            .ilike("username", `%${searchUsername}%`)
+            .neq("id", userId)
+            .limit(10);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setSearchResults(data || []);
+    }
+
+    async function sendFriendRequest(toUserId: string) {
+        const { error } = await supabase
+            .from("friend_requests")
+            .insert({
+                from_user_id: userId,
+                to_user_id: toUserId,
+                status: "pending",
+            });
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        alert("Vänförfrågan skickad!");
+        setSearchResults([]);
+        setSearchUsername("");
+        loadFriendRequests(userId);
+    }
+
+    async function acceptFriendRequest(requestId: string) {
+        const { error } = await supabase
+            .from("friend_requests")
+            .update({ status: "accepted" })
+            .eq("id", requestId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        loadFriendRequests(userId);
+        loadPosts();
+    }
+
+    async function toggleLike(postId: string) {
+        const existingLike = likes.find(
+            (like) => like.post_id === postId && like.user_id === userId
+        );
+
+        if (existingLike) {
+            const { error } = await supabase
+                .from("post_likes")
+                .delete()
+                .eq("id", existingLike.id);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+        } else {
+            const { error } = await supabase
+                .from("post_likes")
+                .insert({
+                    post_id: postId,
+                    user_id: userId,
+                });
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+        }
+
+        loadLikes();
+    }
+
+    async function toggleLeaderboardVisibility() {
+        const nextValue = !showOnLeaderboard;
+
+        const { error } = await supabase
+            .from("profiles")
+            .update({ show_on_leaderboard: nextValue })
+            .eq("id", userId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setShowOnLeaderboard(nextValue);
+    }
+
+    function getUsername(profileId: string) {
+        if (profileId === myProfile?.id) return myProfile.username;
+        return profiles.find((profile) => profile.id === profileId)?.username || "Okänd";
+    }
+
+    const acceptedFriendIds = friendRequests
+        .filter((request) => request.status === "accepted")
+        .map((request) =>
+            request.from_user_id === userId ? request.to_user_id : request.from_user_id
+        );
+
+    const pendingIncomingRequests = friendRequests.filter(
+        (request) => request.status === "pending" && request.to_user_id === userId
+    );
+
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+    const postsLastWeek = posts.filter((post) => {
+        const postDate = new Date(post.date);
+        return postDate >= oneWeekAgo;
+    });
+
+    const leaderboardMap: Record<string, number> = {};
+
+    postsLastWeek.forEach((post) => {
+        leaderboardMap[post.user_id] =
+            (leaderboardMap[post.user_id] || 0) + post.duration;
+    });
+
+    const fullLeaderboard = Object.entries(leaderboardMap).sort(
+        (a, b) => b[1] - a[1]
+    );
+
+    const leaderboard = fullLeaderboard
+        .filter(([id]) => {
+            if (id === userId) return showOnLeaderboard;
+
+            const profile = profiles.find((profile) => profile.id === id);
+            return profile?.show_on_leaderboard ?? false;
+        })
+        .slice(0, 3);
+
+    const myLeaderboardIndex = fullLeaderboard.findIndex(([id]) => id === userId);
+
+    const myLeaderboardMinutes =
+        myLeaderboardIndex === -1 ? 0 : fullLeaderboard[myLeaderboardIndex][1];
+
+    const myWeekMinutes = postsLastWeek
+        .filter((post) => post.user_id === userId)
+        .reduce((sum, post) => sum + post.duration, 0);
+
+    const goalPercent =
+        weeklyGoalMinutes === 0
+            ? 0
+            : Math.min(100, Math.round((myWeekMinutes / weeklyGoalMinutes) * 100));
+
+    if (loading) {
+        return (
+            <main style={pageStyle}>
+                <NavBar />
+                <p>Laddar pepp...</p>
+            </main>
+        );
+    }
+
+    return (
+        <main style={pageStyle}>
+            <NavBar />
+
+            <h1 style={{ fontSize: "36px", marginBottom: "4px" }}>🔥 Pepp</h1>
+            <p style={{ marginTop: 0, color: "#94a3b8" }}>
+                Peppa dina vänner och följ deras postade studiepass.
+            </p>
+
+            <section style={layoutStyle}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+                    <section style={cardStyle}>
+                        <h2 style={{ marginTop: 0 }}>Flöde</h2>
+
+                        {posts.length === 0 ? (
+                            <p style={{ color: "#94a3b8" }}>
+                                Inga postade studiepass ännu.
+                            </p>
+                        ) : (
+                            posts.map((post) => {
+                                const postLikes = likes.filter((like) => like.post_id === post.id);
+                                const likedByMe = postLikes.some((like) => like.user_id === userId);
+
+                                return (
+                                    <article key={post.id} style={postCardStyle}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                                            <div>
+                                                <h3 style={{ margin: 0 }}>
+                                                    {getUsername(post.user_id)}
+                                                </h3>
+
+                                                <p style={{ margin: "8px 0 0", color: "#cbd5e1", fontWeight: "bold" }}>
+                                                    Studerade {post.subject || "ett ämne"} i {formatHours(post.duration)}
+                                                </p>
+
+                                                <p style={{ margin: "6px 0 0", color: "#94a3b8", fontSize: "14px" }}>
+                                                    {formatDate(post.date)}
+                                                </p>
+                                            </div>
+
+                                            <button
+                                                onClick={() => toggleLike(post.id)}
+                                                style={{
+                                                    height: "42px",
+                                                    padding: "0 14px",
+                                                    borderRadius: "999px",
+                                                    background: likedByMe
+                                                        ? "rgba(239, 68, 68, 0.18)"
+                                                        : "rgba(15, 23, 42, 0.7)",
+                                                    color: likedByMe ? "#fecaca" : "white",
+                                                    border: likedByMe
+                                                        ? "1px solid rgba(248, 113, 113, 0.55)"
+                                                        : "1px solid rgba(148, 163, 184, 0.3)",
+                                                    cursor: "pointer",
+                                                    fontWeight: "bold",
+                                                }}
+                                            >
+                                                ❤️ {postLikes.length}
+                                            </button>
+                                        </div>
+
+                                        {post.comment && (
+                                            <p
+                                                style={{
+                                                    margin: "14px 0 0",
+                                                    padding: "12px",
+                                                    borderRadius: "12px",
+                                                    background: "rgba(15, 23, 42, 0.75)",
+                                                    color: "#e2e8f0",
+                                                }}
+                                            >
+                                                “{post.comment}”
+                                            </p>
+                                        )}
+                                    </article>
+                                );
+                            })
+                        )}
+                    </section>
+                </div>
+
+                <aside style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+                    <section style={cardStyle}>
+                        <h2 style={{ marginTop: 0 }}>🏆 Veckans topp 3</h2>
+
+
+                        {leaderboard.length === 0 ? (
+                            <p style={{ color: "#94a3b8" }}>Ingen har postat pass senaste veckan.</p>
+                        ) : (
+                            leaderboard.map(([id, minutes], index) => (
+                                <div key={id} style={leaderboardRowStyle}>
+                                    <strong>
+                                        {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"} {getUsername(id)}
+                                    </strong>
+                                    <span>{formatHours(minutes)}</span>
+                                </div>
+                            ))
+
+                        )}
+                        {myLeaderboardIndex !== -1 && (
+                            <div
+                                style={{
+                                    marginTop: "12px",
+                                    padding: "12px",
+                                    borderRadius: "12px",
+                                    background: "rgba(37, 99, 235, 0.14)",
+                                    border: "1px solid rgba(96, 165, 250, 0.35)",
+                                }}
+                            >
+                                <strong>Din placering: #{myLeaderboardIndex + 1}</strong>
+
+                                <div style={{ color: "#94a3b8", marginTop: "4px" }}>
+                                    {formatHours(myLeaderboardMinutes)}
+                                </div>
+
+                                <label
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "10px",
+                                        marginTop: "14px",
+                                        color: "#cbd5e1",
+                                        fontWeight: "bold",
+                                        cursor: "pointer",
+                                        fontSize: "14px",
+                                    }}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={showOnLeaderboard}
+                                        onChange={toggleLeaderboardVisibility}
+                                        style={{
+                                            width: "16px",
+                                            height: "16px",
+                                            cursor: "pointer",
+                                        }}
+                                    />
+
+                                    Delta i topplistan
+                                </label>
+                            </div>
+                        )}
+                    </section>
+
+                    <section style={cardStyle}>
+                        <h2 style={{ marginTop: 0 }}>👥 Vänner</h2>
+
+                        <div style={{ display: "flex", gap: "8px" }}>
+                            <input
+                                placeholder="Sök användarnamn"
+                                value={searchUsername}
+                                onChange={(e) => setSearchUsername(e.target.value)}
+                                style={inputStyle}
+                            />
+
+                            <button onClick={searchUsers} style={primaryButtonStyle}>
+                                Sök
+                            </button>
+                        </div>
+
+                        {searchResults.length > 0 && (
+                            <div style={{ marginTop: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                                {searchResults.map((profile) => (
+                                    <div key={profile.id} style={friendRowStyle}>
+                                        <strong>{profile.username}</strong>
+                                        <button
+                                            onClick={() => sendFriendRequest(profile.id)}
+                                            style={smallButtonStyle}
+                                        >
+                                            Lägg till
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {pendingIncomingRequests.length > 0 && (
+                            <>
+                                <h3>Förfrågningar</h3>
+
+                                {pendingIncomingRequests.map((request) => (
+                                    <div key={request.id} style={friendRowStyle}>
+                                        <strong>{getUsername(request.from_user_id)}</strong>
+                                        <button
+                                            onClick={() => acceptFriendRequest(request.id)}
+                                            style={smallButtonStyle}
+                                        >
+                                            Acceptera
+                                        </button>
+                                    </div>
+                                ))}
+                            </>
+                        )}
+
+                        <h3>Dina vänner</h3>
+
+                        {acceptedFriendIds.length === 0 ? (
+                            <p style={{ color: "#94a3b8" }}>Du har inga vänner ännu.</p>
+                        ) : (
+                            acceptedFriendIds.map((friendId) => (
+                                <div key={friendId} style={friendRowStyle}>
+                                    <strong>{getUsername(friendId)}</strong>
+                                </div>
+                            ))
+                        )}
+                    </section>
+                </aside>
+            </section>
+        </main>
+    );
+}
+
+const pageStyle = {
+    minHeight: "100vh",
+    padding: "32px",
+    fontFamily: "Arial, sans-serif",
+    background:
+        "linear-gradient(135deg, #020617 0%, #0f172a 40%, #1e293b 100%)",
+    color: "#e2e8f0",
+};
+
+const layoutStyle = {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) 360px",
+    gap: "20px",
+    alignItems: "start",
+};
+
+const cardStyle = {
+    padding: "22px",
+    borderRadius: "20px",
+    background: "rgba(15, 23, 42, 0.78)",
+    border: "1px solid rgba(148, 163, 184, 0.25)",
+    boxShadow: "0 18px 40px rgba(0,0,0,0.32)",
+};
+
+const postCardStyle = {
+    padding: "18px",
+    borderRadius: "18px",
+    background: "rgba(30, 41, 59, 0.72)",
+    border: "1px solid rgba(148, 163, 184, 0.2)",
+    marginBottom: "14px",
+};
+
+const inputStyle = {
+    width: "100%",
+    padding: "12px",
+    borderRadius: "12px",
+    border: "1px solid rgba(148, 163, 184, 0.35)",
+    background: "rgba(2, 6, 23, 0.75)",
+    color: "white",
+    boxSizing: "border-box" as const,
+};
+
+const primaryButtonStyle = {
+    padding: "12px 14px",
+    borderRadius: "12px",
+    border: "none",
+    background: "#2563eb",
+    color: "white",
+    fontWeight: "bold",
+    cursor: "pointer",
+};
+
+const smallButtonStyle = {
+    padding: "8px 10px",
+    borderRadius: "10px",
+    border: "none",
+    background: "#2563eb",
+    color: "white",
+    fontWeight: "bold",
+    cursor: "pointer",
+};
+
+const friendRowStyle = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "12px",
+    padding: "10px",
+    borderRadius: "12px",
+    background: "rgba(15, 23, 42, 0.72)",
+};
+
+const leaderboardRowStyle = {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "12px",
+    padding: "12px",
+    borderRadius: "12px",
+    background: "rgba(15, 23, 42, 0.72)",
+    marginBottom: "8px",
+};
+
+const barOuterStyle = {
+    height: "14px",
+    borderRadius: "999px",
+    overflow: "hidden",
+    background: "rgba(148, 163, 184, 0.22)",
+};
+
+const barInnerStyle = {
+    height: "100%",
+    borderRadius: "999px",
+    background: "#2563eb",
+};
