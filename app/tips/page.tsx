@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
+import { getSavedTheme, THEMES, ThemeKey } from "@/lib/themes";
+import ThemePicker from "@/components/ThemePicker";
 
 const sections = [
     {
@@ -197,10 +199,12 @@ const sections = [
 type Section = (typeof sections)[number];
 
 function TipCard({
+    theme,
     section,
     active,
     onOpen,
 }: {
+    theme: typeof THEMES[ThemeKey];
     section: Section;
     active: boolean;
     onOpen: () => void;
@@ -209,17 +213,15 @@ function TipCard({
         <button
             onClick={onOpen}
             style={{
-                background: active ? "rgba(37, 99, 235, 0.18)" : "rgba(15, 23, 42, 0.72)",
-                border: active
-                    ? "1px solid rgba(96, 165, 250, 0.55)"
-                    : "1px solid rgba(148, 163, 184, 0.22)",
+                background: active ? theme.cardSoft : theme.card,
+                border: `1px solid ${theme.border}`,
                 borderRadius: "22px",
                 padding: "22px",
                 boxShadow: active
                     ? "0 20px 50px rgba(37,99,235,0.25)"
                     : "0 20px 40px rgba(0,0,0,0.28)",
                 backdropFilter: "blur(10px)",
-                color: "white",
+                color: theme.text,
                 textAlign: "left",
                 cursor: "pointer",
                 transition: "0.2s ease",
@@ -274,11 +276,13 @@ function TipCard({
 }
 
 function ExpandedTip({
+    theme,
     section,
     activeIndex,
     setActiveIndex,
     onClose,
 }: {
+    theme: typeof THEMES[ThemeKey];
     section: Section;
     activeIndex: number;
     setActiveIndex: (index: number) => void;
@@ -304,8 +308,8 @@ function ExpandedTip({
                     width: "min(980px, 100%)",
                     maxHeight: "86vh",
                     overflowY: "auto",
-                    background: "linear-gradient(135deg, rgba(15,23,42,0.98), rgba(30,41,59,0.98))",
-                    border: "1px solid rgba(148, 163, 184, 0.28)",
+                    background: theme.card,
+                    border: `1px solid ${theme.border}`,
                     borderRadius: "28px",
                     padding: "30px",
                     boxShadow: "0 35px 90px rgba(0,0,0,0.55)",
@@ -445,6 +449,13 @@ function ExpandedTip({
 }
 
 export default function TipsPage() {
+    const [themeKey, setThemeKey] = useState<ThemeKey>("ocean");
+
+    useEffect(() => {
+        setThemeKey(getSavedTheme());
+    }, []);
+
+    const theme = THEMES[themeKey];
     const [activeIndex, setActiveIndex] = useState<number | null>(null);
     const activeSection = activeIndex === null ? null : sections[activeIndex];
 
@@ -455,9 +466,8 @@ export default function TipsPage() {
                 padding: "32px",
                 paddingBottom: "120px",
                 fontFamily: "Arial, sans-serif",
-                background:
-                    "linear-gradient(135deg, #020617 0%, #0f172a 40%, #1e293b 100%)",
-                color: "white",
+                background: theme.background,
+                color: theme.text,
             }}
         >
             <style>{`
@@ -473,6 +483,7 @@ export default function TipsPage() {
       `}</style>
 
             <NavBar />
+            <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
 
             <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
                 <div style={{ marginBottom: "34px" }}>
@@ -508,6 +519,7 @@ export default function TipsPage() {
                     {sections.map((section, index) => (
                         <TipCard
                             key={section.title}
+                            theme={theme}
                             section={section}
                             active={activeIndex === index}
                             onOpen={() => setActiveIndex(index)}
@@ -520,8 +532,8 @@ export default function TipsPage() {
                         marginTop: "40px",
                         padding: "24px",
                         borderRadius: "22px",
-                        background: "rgba(37, 99, 235, 0.12)",
-                        border: "1px solid rgba(96, 165, 250, 0.22)",
+                        background: theme.cardSoft,
+                        border: `1px solid ${theme.border}`,
                     }}
                 >
                     <h2 style={{ marginTop: 0 }}>🚀 Viktigaste tipset</h2>
@@ -553,6 +565,7 @@ export default function TipsPage() {
 
             {activeSection && activeIndex !== null && (
                 <ExpandedTip
+                    theme={theme}
                     section={activeSection}
                     activeIndex={activeIndex}
                     setActiveIndex={setActiveIndex}

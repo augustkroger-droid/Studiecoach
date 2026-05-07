@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import NavBar from "@/components/NavBar";
 import { supabase } from "@/lib/supabase";
+import { getSavedTheme, THEMES, ThemeKey } from "@/lib/themes";
+import ThemePicker from "@/components/ThemePicker";
 
 type Profile = {
     id: string;
@@ -76,6 +78,13 @@ function toDateString(date: Date) {
 }
 
 export default function PeppPage() {
+    const [themeKey, setThemeKey] = useState<ThemeKey>("ocean");
+
+    useEffect(() => {
+        setThemeKey(getSavedTheme());
+    }, []);
+
+    const theme = THEMES[themeKey];
     const [userId, setUserId] = useState("");
     const [myProfile, setMyProfile] = useState<Profile | null>(null);
     const [showOnLeaderboard, setShowOnLeaderboard] = useState(true);
@@ -464,16 +473,18 @@ export default function PeppPage() {
 
     if (loading) {
         return (
-            <main style={pageStyle}>
+            <main style={pageStyle(theme)}>
                 <NavBar />
+                <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
                 <p>Laddar pepp...</p>
             </main>
         );
     }
 
     return (
-        <main style={pageStyle}>
+        <main style={pageStyle(theme)}>
             <NavBar />
+            <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
 
             <h1 style={{ fontSize: "36px", marginBottom: "4px" }}>🔥 Pepp</h1>
             <p style={{ marginTop: 0, color: "#94a3b8" }}>
@@ -482,7 +493,7 @@ export default function PeppPage() {
 
             <section style={layoutStyle}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-                    <section style={cardStyle}>
+                    <section style={cardStyle(theme)}>
                         <h2 style={{ marginTop: 0 }}>Flöde</h2>
 
                         {posts.length === 0 ? (
@@ -608,7 +619,7 @@ export default function PeppPage() {
                 </div>
 
                 <aside style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-                    <section style={cardStyle}>
+                    <section style={cardStyle(theme)}>
                         <h2 style={{ marginTop: 0 }}>🏆 Veckans topp 3</h2>
 
 
@@ -670,7 +681,7 @@ export default function PeppPage() {
                         )}
                     </section>
 
-                    <section style={cardStyle}>
+                    <section style={cardStyle(theme)}>
                         <h2 style={{ marginTop: 0 }}>👥 Vänner</h2>
 
                         <div style={{ display: "flex", gap: "8px" }}>
@@ -681,7 +692,7 @@ export default function PeppPage() {
                                 style={inputStyle}
                             />
 
-                            <button onClick={searchUsers} style={primaryButtonStyle}>
+                            <button onClick={searchUsers} style={primaryButtonStyle(theme)}>
                                 Sök
                             </button>
                         </div>
@@ -698,7 +709,7 @@ export default function PeppPage() {
                                         ) : (
                                             <button
                                                 onClick={() => sendFriendRequest(profile.id)}
-                                                style={smallButtonStyle}
+                                                style={smallButtonStyle(theme)}
                                             >
                                                 Lägg till
                                             </button>
@@ -717,7 +728,7 @@ export default function PeppPage() {
                                         <strong>{getUsername(request.from_user_id)}</strong>
                                         <button
                                             onClick={() => acceptFriendRequest(request.id)}
-                                            style={smallButtonStyle}
+                                            style={smallButtonStyle(theme)}
                                         >
                                             Acceptera
                                         </button>
@@ -744,14 +755,13 @@ export default function PeppPage() {
     );
 }
 
-const pageStyle = {
+const pageStyle = (theme: typeof THEMES[ThemeKey]) => ({
     minHeight: "100vh",
     padding: "32px",
     fontFamily: "Arial, sans-serif",
-    background:
-        "linear-gradient(135deg, #020617 0%, #0f172a 40%, #1e293b 100%)",
-    color: "#e2e8f0",
-};
+    background: theme.background,
+    color: theme.text,
+});
 
 const layoutStyle = {
     display: "grid",
@@ -760,13 +770,13 @@ const layoutStyle = {
     alignItems: "start",
 };
 
-const cardStyle = {
+const cardStyle = (theme: typeof THEMES[ThemeKey]) => ({
     padding: "22px",
     borderRadius: "20px",
-    background: "rgba(15, 23, 42, 0.78)",
-    border: "1px solid rgba(148, 163, 184, 0.25)",
+    background: theme.card,
+    border: `1px solid ${theme.border}`,
     boxShadow: "0 18px 40px rgba(0,0,0,0.32)",
-};
+});
 
 const postCardStyle = {
     padding: "18px",
@@ -786,25 +796,25 @@ const inputStyle = {
     boxSizing: "border-box" as const,
 };
 
-const primaryButtonStyle = {
+const primaryButtonStyle = (theme: typeof THEMES[ThemeKey]) => ({
     padding: "12px 14px",
     borderRadius: "12px",
-    border: "none",
-    background: "#2563eb",
-    color: "white",
+    border: `1px solid ${theme.border}`,
+    background: "rgba(255,255,255,0.14)",
+    color: theme.text,
     fontWeight: "bold",
     cursor: "pointer",
-};
+});
 
-const smallButtonStyle = {
+const smallButtonStyle = (theme: typeof THEMES[ThemeKey]) => ({
     padding: "8px 10px",
     borderRadius: "10px",
-    border: "none",
-    background: "#2563eb",
-    color: "white",
+    border: `1px solid ${theme.border}`,
+    background: "rgba(255,255,255,0.14)",
+    color: theme.text,
     fontWeight: "bold",
     cursor: "pointer",
-};
+});
 
 const friendRowStyle = {
     display: "flex",

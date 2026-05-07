@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import NavBar from "@/components/NavBar";
+import { getSavedTheme, THEMES, ThemeKey } from "@/lib/themes";
+import ThemePicker from "@/components/ThemePicker";
 
 type Profile = {
   username: string;
@@ -82,6 +84,13 @@ function formatTime(minutes: number) {
 }
 
 export default function Home() {
+  const [themeKey, setThemeKey] = useState<ThemeKey>("ocean");
+
+  useEffect(() => {
+    setThemeKey(getSavedTheme());
+  }, []);
+
+  const theme = THEMES[themeKey];
   const [userId, setUserId] = useState("");
   const [username, setUsername] = useState("");
   const [nextSession, setNextSession] = useState<StudySession | null>(null);
@@ -225,9 +234,8 @@ export default function Home() {
         minHeight: "100vh",
         padding: "32px",
         fontFamily: "Arial, sans-serif",
-        background:
-          "radial-gradient(circle at top left, rgba(37,99,235,0.22), transparent 34%), linear-gradient(135deg, #020617 0%, #0f172a 45%, #1e293b 100%)",
-        color: "#e2e8f0",
+        background: theme.background,
+        color: theme.text,
       }}
     >
       <div
@@ -240,9 +248,11 @@ export default function Home() {
       >
         <NavBar />
 
+
         <button
           onClick={logout}
           style={{
+            marginTop: "72px",
             background: "rgba(239, 68, 68, 0.15)",
             color: "#fecaca",
             border: "1px solid rgba(248, 113, 113, 0.45)",
@@ -250,12 +260,13 @@ export default function Home() {
             borderRadius: "12px",
             cursor: "pointer",
             fontWeight: "bold",
+            
           }}
         >
           Logga ut
         </button>
       </div>
-
+      <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
       <header
         style={{
           display: "flex",
@@ -297,7 +308,7 @@ export default function Home() {
           marginBottom: "22px",
         }}
       >
-        <div style={heroCardStyle}>
+        <div style={heroCardStyle(theme)}>
           <div
             style={{
               display: "grid",
@@ -334,12 +345,12 @@ export default function Home() {
                   {isToday(nextSession.date) ? (
                     <Link
                       href={`/pass/${nextSession.id}?mode=study`}
-                      style={primaryLinkStyle}
+                      style={primaryLinkStyle(theme)}
                     >
                       Påbörja studiepass →
                     </Link>
                   ) : (
-                    <Link href="/kalender" style={primaryLinkStyle}>
+                    <Link href="/kalender" style={primaryLinkStyle(theme)}>
                       Se i kalendern →
                     </Link>
                   )}
@@ -350,7 +361,7 @@ export default function Home() {
                     Du har inget kommande studiepass inlagt ännu.
                   </p>
 
-                  <Link href="/kalender" style={primaryLinkStyle}>
+                  <Link href="/kalender" style={primaryLinkStyle(theme)}>
                     Planera ett pass →
                   </Link>
                 </>
@@ -381,7 +392,7 @@ export default function Home() {
                     {daysUntil(nextExam.date)} dagar kvar
                   </p>
 
-                  <Link href="/kalender" style={primaryLinkStyle}>
+                  <Link href="/kalender" style={primaryLinkStyle(theme)}>
                     Se i kalendern →
                   </Link>
                 </>
@@ -391,7 +402,7 @@ export default function Home() {
                     Du har inget kommande prov inlagt ännu.
                   </p>
 
-                  <Link href="/kalender" style={primaryLinkStyle}>
+                  <Link href="/kalender" style={primaryLinkStyle(theme)}>
                     Lägg till prov →
                   </Link>
                 </>
@@ -400,14 +411,14 @@ export default function Home() {
           </div>
         </div>
 
-        <div style={heroCardStyle}>
+        <div style={heroCardStyle(theme)}>
           <h2 style={{ marginTop: 0 }}>🔥 Snabbstart</h2>
 
           <div style={{ display: "grid", gap: "12px" }}>
-            <QuickLink href="/kalender" title="Kalender" emoji="📅" />
-            <QuickLink href="/pepp" title="Pepp" emoji="🔥" />
-            <QuickLink href="/tips" title="Studietips" emoji="💡" />
-            <QuickLink href="/profil" title="Profil" emoji="👤" />
+            <QuickLink theme={theme} href="/kalender" title="Kalender" emoji="📅" />
+            <QuickLink theme={theme} href="/pepp" title="Pepp" emoji="🔥" />
+            <QuickLink theme={theme} href="/tips" title="Studietips" emoji="💡" />
+            <QuickLink theme={theme} href="/profil" title="Profil" emoji="👤" />
           </div>
         </div>
       </section>
@@ -420,7 +431,7 @@ export default function Home() {
           alignItems: "start",
         }}
       >
-        <section style={cardStyle}>
+        <section style={cardStyle(theme)}>
           <div
             style={{
               display: "flex",
@@ -478,7 +489,7 @@ export default function Home() {
           )}
         </section>
 
-        <section style={cardStyle}>
+        <section style={cardStyle(theme)}>
           <h2 style={{ marginTop: 0 }}>🏆 Veckans topp 3</h2>
 
           {leaderboard.length === 0 ? (
@@ -503,10 +514,12 @@ export default function Home() {
 }
 
 function QuickLink({
+  theme,
   href,
   title,
   emoji,
 }: {
+  theme: typeof THEMES[ThemeKey];
   href: string;
   title: string;
   emoji: string;
@@ -517,9 +530,9 @@ function QuickLink({
       style={{
         padding: "14px",
         borderRadius: "14px",
-        background: "rgba(2, 6, 23, 0.55)",
-        border: "1px solid rgba(148, 163, 184, 0.18)",
-        color: "#e2e8f0",
+        background: theme.cardSoft,
+        border: `1px solid ${theme.border}`,
+        color: theme.text,
         textDecoration: "none",
         fontWeight: "bold",
         display: "flex",
@@ -534,21 +547,21 @@ function QuickLink({
   );
 }
 
-const heroCardStyle = {
+const heroCardStyle = (theme: typeof THEMES[ThemeKey]) => ({
   padding: "26px",
   borderRadius: "24px",
-  background: "rgba(15, 23, 42, 0.78)",
-  border: "1px solid rgba(148, 163, 184, 0.24)",
+  background: theme.card,
+  border: `1px solid ${theme.border}`,
   boxShadow: "0 22px 50px rgba(0,0,0,0.35)",
-};
+});
 
-const cardStyle = {
+const cardStyle = (theme: typeof THEMES[ThemeKey]) => ({
   padding: "22px",
   borderRadius: "22px",
-  background: "rgba(15, 23, 42, 0.72)",
-  border: "1px solid rgba(148, 163, 184, 0.22)",
+  background: theme.card,
+  border: `1px solid ${theme.border}`,
   boxShadow: "0 18px 40px rgba(0,0,0,0.3)",
-};
+});
 
 const miniPostStyle = {
   padding: "16px",
@@ -567,16 +580,17 @@ const leaderboardRowStyle = {
   marginBottom: "8px",
 };
 
-const primaryLinkStyle = {
+const primaryLinkStyle = (theme: typeof THEMES[ThemeKey]) => ({
   display: "inline-block",
   marginTop: "12px",
   padding: "12px 16px",
   borderRadius: "12px",
-  background: "#2563eb",
-  color: "white",
+  background: "rgba(255,255,255,0.14)",
+  border: `1px solid ${theme.border}`,
+  color: theme.text,
   textDecoration: "none",
   fontWeight: "bold",
-};
+});
 
 const smallLinkStyle = {
   color: "#93c5fd",

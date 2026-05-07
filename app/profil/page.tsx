@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import NavBar from "@/components/NavBar";
+import { getSavedTheme, THEMES, ThemeKey } from "@/lib/themes";
+import ThemePicker from "@/components/ThemePicker";
 
 type StudySession = {
     id: string;
@@ -46,6 +48,13 @@ function formatHours(minutes: number) {
 }
 
 export default function ProfilPage() {
+    const [themeKey, setThemeKey] = useState<ThemeKey>("ocean");
+
+    useEffect(() => {
+        setThemeKey(getSavedTheme());
+    }, []);
+
+    const theme = THEMES[themeKey];
     const [profile, setProfile] = useState<Profile | null>(null);
     const [sessions, setSessions] = useState<StudySession[]>([]);
     const [loading, setLoading] = useState(true);
@@ -158,23 +167,25 @@ export default function ProfilPage() {
 
     if (loading) {
         return (
-            <main style={pageStyle}>
+            <main style={pageStyle(theme)}>
                 <NavBar />
+                <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
                 <p>Laddar profil...</p>
             </main>
         );
     }
 
     return (
-        <main style={pageStyle}>
+        <main style={pageStyle(theme)}>
             <NavBar />
+            <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
 
             <h1 style={{ fontSize: "36px", marginBottom: "4px" }}>👤 Profil</h1>
             <p style={{ marginTop: 0, color: "#94a3b8" }}>
                 Se din statistik och dina framsteg.
             </p>
 
-            <section style={profileCardStyle}>
+            <section style={profileCardStyle(theme)}>
                 <div>
                     <p style={{ margin: 0, color: "#94a3b8" }}>Användarnamn</p>
                     <h2 style={{ margin: "6px 0 0", fontSize: "32px" }}>
@@ -184,19 +195,20 @@ export default function ProfilPage() {
             </section>
 
             <section style={gridStyle}>
-                <StatCard title="Total studietid" value={formatHours(totalMinutes)} />
-                <StatCard title="Genomförda pass" value={`${totalDonePasses}`} />
-                <StatCard title="Aktiva studiedagar" value={`${activeDays}`} />
-                <StatCard title="Snitt per aktiv dag" value={formatHours(averagePerActiveDay)} />
-                <StatCard title="Fokusnivå" value={`${focusLevel}%`} />
+                <StatCard theme={theme} title="Total studietid" value={formatHours(totalMinutes)} />
+                <StatCard theme={theme} title="Genomförda pass" value={`${totalDonePasses}`} />
+                <StatCard theme={theme} title="Aktiva studiedagar" value={`${activeDays}`} />
+                <StatCard theme={theme} title="Snitt per aktiv dag" value={formatHours(averagePerActiveDay)} />
+                <StatCard theme={theme} title="Fokusnivå" value={`${focusLevel}%`} />
                 <StatCard
+                    theme={theme}
                     title="Mest studerade ämne"
                     value={mostStudiedSubject ? mostStudiedSubject[0] : "Inget ännu"}
                     subValue={mostStudiedSubject ? formatHours(mostStudiedSubject[1]) : ""}
                 />
             </section>
 
-            <section style={chartCardStyle}>
+            <section style={chartCardStyle(theme)}>
                 <h2 style={{ marginTop: 0 }}>Snitt per veckodag senaste månaden</h2>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -240,16 +252,18 @@ export default function ProfilPage() {
 }
 
 function StatCard({
+    theme,
     title,
     value,
     subValue,
 }: {
+    theme: typeof THEMES[ThemeKey];
     title: string;
     value: string;
     subValue?: string;
 }) {
     return (
-        <div style={statCardStyle}>
+        <div style={statCardStyle(theme)}>
             <p style={{ margin: 0, color: "#94a3b8", fontSize: "14px" }}>{title}</p>
 
             <h2 style={{ margin: "8px 0 0", fontSize: "24px" }}>{value}</h2>
@@ -263,23 +277,22 @@ function StatCard({
     );
 }
 
-const pageStyle = {
+const pageStyle = (theme: typeof THEMES[ThemeKey]) => ({
     minHeight: "100vh",
     padding: "32px",
     fontFamily: "Arial, sans-serif",
-    background:
-        "linear-gradient(135deg, #020617 0%, #0f172a 40%, #1e293b 100%)",
-    color: "#e2e8f0",
-};
+    background: theme.background,
+    color: theme.text,
+});
 
-const profileCardStyle = {
+const profileCardStyle = (theme: typeof THEMES[ThemeKey]) => ({
     marginTop: "24px",
     padding: "28px",
     borderRadius: "20px",
-    background: "rgba(15, 23, 42, 0.85)",
-    border: "1px solid rgba(148, 163, 184, 0.25)",
+    background: theme.card,
+    border: `1px solid ${theme.border}`,
     boxShadow: "0 20px 45px rgba(0,0,0,0.35)",
-};
+});
 
 const gridStyle = {
     display: "grid",
@@ -288,19 +301,19 @@ const gridStyle = {
     marginTop: "20px",
 };
 
-const statCardStyle = {
+const statCardStyle = (theme: typeof THEMES[ThemeKey]) => ({
     padding: "22px",
     borderRadius: "18px",
-    background: "rgba(15, 23, 42, 0.75)",
-    border: "1px solid rgba(148, 163, 184, 0.22)",
+    background: theme.card,
+    border: `1px solid ${theme.border}`,
     boxShadow: "0 14px 32px rgba(0,0,0,0.28)",
-};
+});
 
-const chartCardStyle = {
+const chartCardStyle = (theme: typeof THEMES[ThemeKey]) => ({
     marginTop: "20px",
     padding: "24px",
     borderRadius: "20px",
-    background: "rgba(15, 23, 42, 0.75)",
-    border: "1px solid rgba(148, 163, 184, 0.22)",
+    background: theme.card,
+    border: `1px solid ${theme.border}`,
     boxShadow: "0 14px 32px rgba(0,0,0,0.28)",
-};
+});

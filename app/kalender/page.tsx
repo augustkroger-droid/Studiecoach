@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import NavBar from "@/components/NavBar";
+import { getSavedTheme, THEMES, ThemeKey } from "@/lib/themes";
+import ThemePicker from "@/components/ThemePicker";
 
 const days = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
 
@@ -67,6 +69,13 @@ function getWeekNumber(date: Date) {
 }
 
 export default function KalenderPage() {
+    const [themeKey, setThemeKey] = useState<ThemeKey>("ocean");
+
+    useEffect(() => {
+        setThemeKey(getSavedTheme());
+    }, []);
+
+    const theme = THEMES[themeKey];
     const [weekOffset, setWeekOffset] = useState(0);
     const [sessions, setSessions] = useState<StudySession[]>([]);
     const [exams, setExams] = useState<Exam[]>([]);
@@ -789,13 +798,13 @@ export default function KalenderPage() {
                 padding: "32px",
                 paddingBottom: "380px",
                 fontFamily: "Arial, sans-serif",
-                background:
-                    "linear-gradient(135deg, #020617 0%, #0f172a 40%, #1e293b 100%)",
-                boxShadow: "inset 0 0 200px rgba(37, 99, 235, 0.1)",
-                color: "#e2e8f0",
+                background: theme.background,
+                boxShadow: "inset 0 0 220px rgba(255,255,255,0.08)",
+                color: theme.text,
             }}
         >
             <NavBar />
+            <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
 
             <h1 style={{ fontSize: "36px", marginBottom: "4px" }}>📅 Studiekalender</h1>
             <p style={{ marginTop: 0, color: "#94a3b8" }}>
@@ -906,14 +915,14 @@ export default function KalenderPage() {
                                     }
                                 }}
                                 style={{
-                                    border: "1px solid rgba(148, 163, 184, 0.35)",
+                                    border: `1px solid ${theme.border}`,
                                     borderRadius: "10px",
                                     padding: "10px",
                                     minHeight: "180px",
                                     overflowY: "auto",
                                     cursor: "pointer",
-                                    background: "rgba(15, 23, 42, 0.6)",
-                                    color: "#e2e8f0",
+                                    background: theme.card,
+                                    color: theme.text,
                                     boxShadow: "0 10px 25px rgba(0,0,0,0.4)",
                                     backdropFilter: "blur(6px)",
                                 }}
@@ -1055,7 +1064,7 @@ export default function KalenderPage() {
             <div
                 style={{
                     position: "fixed",
-                    left: "80px",
+                    left: "20px",
                     bottom: "20px",
                     zIndex: 20,
                 }}
@@ -1065,8 +1074,8 @@ export default function KalenderPage() {
                         width: "320px",
                         padding: "18px",
                         borderRadius: "20px",
-                        background: "rgba(15, 23, 42, 0.92)",
-                        border: "1px solid rgba(148, 163, 184, 0.28)",
+                        background: theme.card,
+                        border: `1px solid ${theme.border}`,
                         boxShadow: "0 25px 60px rgba(0,0,0,0.45)",
                         backdropFilter: "blur(12px)",
                     }}
@@ -1178,8 +1187,8 @@ export default function KalenderPage() {
                         width: "330px",
                         maxHeight: "48vh",
                         overflowY: "auto",
-                        background: "rgba(15, 23, 42, 0.92)",
-                        border: "1px solid rgba(148, 163, 184, 0.28)",
+                        background: theme.card,
+                        border: `1px solid ${theme.border}`,
                         borderRadius: "20px",
                         padding: "18px",
                         boxShadow: "0 25px 60px rgba(0,0,0,0.45)",

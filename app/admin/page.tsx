@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import NavBar from "@/components/NavBar";
+import { getSavedTheme, THEMES, ThemeKey } from "@/lib/themes";
+import ThemePicker from "@/components/ThemePicker";
 
 type Profile = {
     id: string;
@@ -65,6 +67,13 @@ function formatDate(dateString: string) {
 }
 
 export default function AdminPage() {
+    const [themeKey, setThemeKey] = useState<ThemeKey>("ocean");
+
+    useEffect(() => {
+        setThemeKey(getSavedTheme());
+    }, []);
+
+    const theme = THEMES[themeKey];
     const [loading, setLoading] = useState(true);
     const [allowed, setAllowed] = useState(false);
 
@@ -342,8 +351,9 @@ export default function AdminPage() {
 
     if (loading) {
         return (
-            <main style={pageStyle}>
+            <main style={pageStyle(theme)}>
                 <NavBar />
+                <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
                 <p>Laddar admin...</p>
             </main>
         );
@@ -351,8 +361,9 @@ export default function AdminPage() {
 
     if (!allowed) {
         return (
-            <main style={pageStyle}>
+            <main style={pageStyle(theme)}>
                 <NavBar />
+                <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
                 <h1>Inte tillåtet</h1>
                 <p>Du har inte behörighet att se denna sida.</p>
             </main>
@@ -360,8 +371,11 @@ export default function AdminPage() {
     }
 
     return (
-        <main style={pageStyle}>
+        <main style={pageStyle(theme)}>
             <NavBar />
+            <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
+
+
 
             <h1>🛠 Admin</h1>
             <p style={{ color: "#94a3b8" }}>
@@ -683,13 +697,13 @@ function PostCard({ post, username }: { post: StudyPost; username: string }) {
     );
 }
 
-const pageStyle = {
+const pageStyle = (theme: typeof THEMES[ThemeKey]) => ({
     minHeight: "100vh",
     padding: "32px",
     fontFamily: "Arial, sans-serif",
-    background: "linear-gradient(135deg, #020617 0%, #0f172a 45%, #1e293b 100%)",
-    color: "#e2e8f0",
-};
+    background: theme.background,
+    color: theme.text,
+});
 
 const adminLayoutStyle = {
     display: "grid",

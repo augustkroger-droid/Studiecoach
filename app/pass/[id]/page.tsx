@@ -4,6 +4,8 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import NavBar from "@/components/NavBar";
+import { getSavedTheme, THEMES, ThemeKey } from "@/lib/themes";
+import ThemePicker from "@/components/ThemePicker";
 
 type Priority = "Låg" | "Medel" | "Hög";
 type BlockType = "understand" | "practice" | "quiz" | "repeat";
@@ -156,7 +158,13 @@ export default function PassPage() {
     const isViewMode = mode === "view";
     const readOnly = isViewMode;
 
+    const [themeKey, setThemeKey] = useState<ThemeKey>("ocean");
 
+    useEffect(() => {
+        setThemeKey(getSavedTheme());
+    }, []);
+
+    const theme = THEMES[themeKey];
 
     const [subject, setSubject] = useState("");
     const [plannedMinutes, setPlannedMinutes] = useState(0);
@@ -793,13 +801,18 @@ export default function PassPage() {
                 overflowX: "auto",
                 padding: "32px",
                 fontFamily: "Arial, sans-serif",
-                background:
-                    "linear-gradient(135deg, #020617 0%, #0f172a 40%, #1e293b 100%)",
-                color: "#e2e8f0",
+                background: theme.background,
+                color: theme.text,
             }}
         >
             <div style={{ minWidth: isStudyMode ? "1280px" : "1180px" }}>
                 <NavBar />
+
+                <ThemePicker
+                    themeKey={themeKey}
+                    setThemeKey={setThemeKey}
+                    hidden={isStudyMode && isRunning}
+                />
 
                 {isStudyMode && (
                     <div
@@ -1104,7 +1117,7 @@ export default function PassPage() {
                                                             }}
                                                         />
 
-                                                        {isStudyMode || isViewMode ? (
+                                                        {isViewMode ? (
                                                             <span
                                                                 style={{
                                                                     textDecoration: item.done ? "line-through" : "none",
@@ -1121,18 +1134,13 @@ export default function PassPage() {
                                                                     updateChecklistText(block.id, item.id, event.target.value)
                                                                 }
                                                                 placeholder="Skriv checkruta..."
-                                                                style={{ ...inputStyle, padding: "8px 10px" }}
+                                                                style={{
+                                                                    ...inputStyle,
+                                                                    padding: "8px 10px",
+                                                                    textDecoration: item.done ? "line-through" : "none",
+                                                                    color: item.done ? "#94a3b8" : "#e2e8f0",
+                                                                }}
                                                             />
-                                                        )}
-
-                                                        {!readOnly && (
-                                                            <button
-                                                                onClick={() => removeChecklistItem(block.id, item.id)}
-                                                                style={{ ...smallButton, padding: "6px 9px" }}
-                                                                type="button"
-                                                            >
-                                                                ×
-                                                            </button>
                                                         )}
                                                     </label>
                                                 ))}

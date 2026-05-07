@@ -1,12 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { getSavedTheme, THEMES, ThemeKey } from "@/lib/themes";
+import ThemePicker from "@/components/ThemePicker";
 
 export default function LoginPage() {
   const router = useRouter();
 
+  const [themeKey, setThemeKey] = useState<ThemeKey>("ocean");
+
+  useEffect(() => {
+    setThemeKey(getSavedTheme());
+  }, []);
+
+  const theme = THEMES[themeKey];
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -81,17 +90,17 @@ export default function LoginPage() {
         justifyContent: "center",
         padding: "24px",
         fontFamily: "Arial, sans-serif",
-        background:
-          "linear-gradient(135deg, #020617 0%, #0f172a 45%, #1e293b 100%)",
-        color: "#e2e8f0",
+        background: theme.background,
+        color: theme.text,
       }}
     >
+      <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
       <section
         style={{
           width: "100%",
           maxWidth: "420px",
-          background: "rgba(15, 23, 42, 0.85)",
-          border: "1px solid rgba(148, 163, 184, 0.25)",
+          background: theme.card,
+          border: `1px solid ${theme.border}`,
           borderRadius: "24px",
           padding: "32px",
           boxShadow: "0 25px 60px rgba(0,0,0,0.45)",
@@ -105,7 +114,7 @@ export default function LoginPage() {
             style={{
               margin: 0,
               fontSize: "32px",
-              color: "#ffffff",
+              color: theme.text,
             }}
           >
             Välkommen tillbaka
@@ -114,7 +123,7 @@ export default function LoginPage() {
           <p
             style={{
               marginTop: "10px",
-              color: "#94a3b8",
+              color: theme.muted,
               lineHeight: 1.5,
             }}
           >
@@ -162,8 +171,7 @@ export default function LoginPage() {
           <button
             onClick={signIn}
             disabled={loading}
-            style={primaryButtonStyle}
-          >
+            style={primaryButtonStyle(theme)}          >
             {loading ? "Loggar in..." : "Logga in"}
           </button>
 
@@ -192,17 +200,19 @@ const inputStyle = {
   boxSizing: "border-box" as const,
 };
 
-const primaryButtonStyle = {
+const primaryButtonStyle = (theme: typeof THEMES[ThemeKey]) => ({
   marginTop: "12px",
   padding: "14px",
   borderRadius: "14px",
-  border: "none",
+  border: `1px solid ${theme.border}`,
   cursor: "pointer",
   fontWeight: "bold",
   fontSize: "16px",
-  background: "#2563eb",
-  color: "#ffffff",
-};
+  background: "rgba(255,255,255,0.14)",
+  color: theme.text,
+  backdropFilter: "blur(10px)",
+  boxShadow: "0 10px 25px rgba(0,0,0,0.18)",
+});
 
 const secondaryButtonStyle = {
   padding: "14px",
