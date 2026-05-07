@@ -250,6 +250,22 @@ export default function PeppPage() {
     }
 
     async function sendFriendRequest(toUserId: string) {
+        const existingRequest = friendRequests.find(
+            (request) =>
+                (request.from_user_id === userId && request.to_user_id === toUserId) ||
+                (request.from_user_id === toUserId && request.to_user_id === userId)
+        );
+
+        if (existingRequest) {
+            if (existingRequest.status === "accepted") {
+                alert("Ni är redan vänner.");
+            } else {
+                alert("Det finns redan en vänförfrågan mellan er.");
+            }
+
+            return;
+        }
+
         const { error } = await supabase
             .from("friend_requests")
             .insert({
@@ -356,11 +372,17 @@ export default function PeppPage() {
         loadLikes();
     }
 
-    const acceptedFriendIds = friendRequests
-        .filter((request) => request.status === "accepted")
-        .map((request) =>
-            request.from_user_id === userId ? request.to_user_id : request.from_user_id
-        );
+    const acceptedFriendIds = Array.from(
+        new Set(
+            friendRequests
+                .filter((request) => request.status === "accepted")
+                .map((request) =>
+                    request.from_user_id === userId
+                        ? request.to_user_id
+                        : request.from_user_id
+                )
+        )
+    );
 
     const pendingIncomingRequests = friendRequests.filter(
         (request) => request.status === "pending" && request.to_user_id === userId
@@ -637,12 +659,18 @@ export default function PeppPage() {
                                 {searchResults.map((profile) => (
                                     <div key={profile.id} style={friendRowStyle}>
                                         <strong>{profile.username}</strong>
-                                        <button
-                                            onClick={() => sendFriendRequest(profile.id)}
-                                            style={smallButtonStyle}
-                                        >
-                                            Lägg till
-                                        </button>
+                                        {acceptedFriendIds.includes(profile.id) ? (
+                                            <span style={{ color: "#94a3b8", fontWeight: "bold" }}>
+                                                Redan vän
+                                            </span>
+                                        ) : (
+                                            <button
+                                                onClick={() => sendFriendRequest(profile.id)}
+                                                style={smallButtonStyle}
+                                            >
+                                                Lägg till
+                                            </button>
+                                        )}
                                     </div>
                                 ))}
                             </div>
