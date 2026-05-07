@@ -8,6 +8,7 @@ type Profile = {
     id: string;
     username: string;
     show_on_leaderboard?: boolean;
+    is_admin?: boolean;
 };
 
 type FriendRequest = {
@@ -109,16 +110,44 @@ export default function PeppPage() {
 
         const { data: profileData } = await supabase
             .from("profiles")
-            .select("id, username, show_on_leaderboard")
+            .select("id, username, show_on_leaderboard, is_admin")
             .eq("id", user.id)
             .single();
 
         setMyProfile(profileData);
         setShowOnLeaderboard(profileData?.show_on_leaderboard ?? false);
 
+        const isAdmin = profileData?.is_admin ?? false;
+
+        const loadedFriendRequests = await loadFriendRequests(user.id);
+
+        const acceptedIds = loadedFriendRequests
+            .filter((request) => request.status === "accepted")
+            .map((request) =>
+                request.from_user_id === user.id
+                    ? request.to_user_id
+                    : request.from_user_id
+            );
+
+        const allowedUserIds = isAdmin ? null : [user.id, ...acceptedIds];
+
+        const loadedPosts = await loadPosts(allowedUserIds);
+
+        const profileIds = new Set<string>();
+
+        profileIds.add(user.id);
+
+        loadedFriendRequests.forEach((request) => {
+            profileIds.add(request.from_user_id);
+            profileIds.add(request.to_user_id);
+        });
+
+        loadedPosts.forEach((post) => {
+            profileIds.add(post.user_id);
+        });
+
         await Promise.all([
-            loadFriendRequests(user.id),
-            loadPosts(),
+            loadProfiles(isAdmin, Array.from(profileIds)),
             loadLikes(),
             loadWeeklyGoal(user.id),
         ]);
@@ -134,48 +163,53 @@ export default function PeppPage() {
 
         if (error) {
             alert(error.message);
-            return;
+            return [];
         }
 
         setFriendRequests(data || []);
-
-        const userIds = new Set<string>();
-
-        (data || []).forEach((request) => {
-            userIds.add(request.from_user_id);
-            userIds.add(request.to_user_id);
-        });
-
-        userIds.add(currentUserId);
-
-        const postUserIds = posts.map((post) => post.user_id);
-        postUserIds.forEach((id) => userIds.add(id));
-
-        if (userIds.size > 0) {
-            const { data: profileData } = await supabase
-                .from("profiles")
-                .select("id, username, show_on_leaderboard")
-                .in("id", Array.from(userIds));
-
-            setProfiles(profileData || []);
-        }
+        return data || [];
     }
 
-    async function loadPosts() {
+    async function loadPosts(allowedUserIds: string[] | null) {
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-        const { data, error } = await supabase
+        let query = supabase
             .from("study_posts")
             .select("*")
             .gte("date", oneWeekAgo.toISOString().split("T")[0])
             .order("created_at", { ascending: false });
+
+        if (allowedUserIds) {
+            query = query.in("user_id", allowedUserIds);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            alert(error.message);
+            return [];
+        }
+
+        setPosts(data || []);
+        return data || [];
+    }
+
+    async function loadProfiles(isAdmin: boolean, userIds: string[]) {
+        const profileQuery = supabase
+            .from("profiles")
+            .select("id, username, show_on_leaderboard, is_admin");
+
+        const { data, error } = isAdmin
+            ? await profileQuery
+            : await profileQuery.in("id", userIds);
+
         if (error) {
             alert(error.message);
             return;
         }
 
-        setPosts(data || []);
+        setProfiles(data || []);
     }
 
     async function loadLikes() {
@@ -282,7 +316,7 @@ export default function PeppPage() {
         alert("Vänförfrågan skickad!");
         setSearchResults([]);
         setSearchUsername("");
-        loadFriendRequests(userId);
+        loadEverything();
     }
 
     async function acceptFriendRequest(requestId: string) {
@@ -296,8 +330,7 @@ export default function PeppPage() {
             return;
         }
 
-        loadFriendRequests(userId);
-        loadPosts();
+        loadEverything();
     }
 
     async function toggleLike(postId: string) {
@@ -368,8 +401,7 @@ export default function PeppPage() {
             return;
         }
 
-        loadPosts();
-        loadLikes();
+        loadEverything();
     }
 
     const acceptedFriendIds = Array.from(

@@ -34,6 +34,20 @@ type StudyPost = {
     title?: string | null;
 };
 
+type AdminClass = {
+    id: string;
+    admin_id: string;
+    name: string;
+    created_at: string;
+};
+
+type AdminClassStudent = {
+    id: string;
+    class_id: string;
+    student_id: string;
+    created_at: string;
+};
+
 const weekDays = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
 
 function formatHours(minutes: number) {
@@ -58,6 +72,11 @@ export default function AdminPage() {
     const [sessions, setSessions] = useState<StudySession[]>([]);
     const [posts, setPosts] = useState<StudyPost[]>([]);
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+
+    const [adminClasses, setAdminClasses] = useState<AdminClass[]>([]);
+    const [classStudents, setClassStudents] = useState<AdminClassStudent[]>([]);
+    const [newClassName, setNewClassName] = useState("");
+    const [openClassIds, setOpenClassIds] = useState<string[]>([]);
 
     useEffect(() => {
         loadAdminData();
@@ -85,29 +104,59 @@ export default function AdminPage() {
         }
 
         setAllowed(true);
+        const currentAdminId = user.id;
 
         const { data: profileData } = await supabase
             .from("profiles")
             .select("id, username, is_admin, created_at, show_on_leaderboard")
-            .order("created_at", { ascending: false });
+            .order("username", { ascending: true });
 
-        const { data: sessionData } = await supabase
-            .from("study_sessions")
-            .select("id, user_id, subject, duration, date, status")
-            .order("date", { ascending: false });
+        const { data: sessionData, error: sessionError } = await supabase
+            .rpc("get_admin_study_sessions");
+
+        if (sessionError) {
+            alert(sessionError.message);
+        }
 
         const { data: postData, error: postError } = await supabase
             .from("study_posts")
             .select("*")
             .order("created_at", { ascending: false });
 
+
+
+        const { data: classData, error: classError } = await supabase
+            .from("admin_classes")
+            .select("*")
+            .eq("admin_id", currentAdminId)
+            .order("name", { ascending: true });
+
+        if (classError) {
+            alert(classError.message);
+        }
+
+        const { data: classStudentData, error: classStudentError } = await supabase
+            .from("admin_class_students")
+            .select("*");
+
+        if (classStudentError) {
+            alert(classStudentError.message);
+        }
+
         if (postError) {
             alert(postError.message);
         }
 
         setProfiles(profileData || []);
-        setSessions(sessionData || []);
+        const sortedSessionData = ((sessionData || []) as StudySession[]).sort(
+            (a: StudySession, b: StudySession) =>
+                String(b.date).localeCompare(String(a.date))
+        );
+
+        setSessions(sortedSessionData);
         setPosts(postData || []);
+        setAdminClasses(classData || []);
+        setClassStudents(classStudentData || []);
         setSelectedUserId(profileData?.[0]?.id || null);
         setLoading(false);
     }
@@ -116,7 +165,115 @@ export default function AdminPage() {
         return profiles.find((profile) => profile.id === userId)?.username || "Okänd användare";
     }
 
+    function isStudentInAnyClass(studentId: string) {
+        return classStudents.some((row) => row.student_id === studentId);
+    }
+
+    function toggleClassOpen(classId: string) {
+        setOpenClassIds((current) =>
+            current.includes(classId)
+                ? current.filter((id) => id !== classId)
+                : [...current, classId]
+        );
+    }
+
+    async function createClass() {
+        const name = newClassName.trim();
+
+        if (!name) return;
+
+        const { data: userData } = await supabase.auth.getUser();
+        const user = userData.user;
+
+        if (!user) {
+            window.location.href = "/login";
+            return;
+        }
+
+        const { error } = await supabase
+            .from("admin_classes")
+            .insert({
+                admin_id: user.id,
+                name,
+            });
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setNewClassName("");
+        loadAdminData();
+    }
+
+    async function addStudentToClass(studentId: string, classId: string) {
+        if (!classId) return;
+
+        if (isStudentInAnyClass(studentId)) {
+            alert("Eleven ligger redan i en klass. Ta bort eleven från den klassen först.");
+            return;
+        }
+
+        const { error } = await supabase
+            .from("admin_class_students")
+            .insert({
+                class_id: classId,
+                student_id: studentId,
+            });
+
+        if (error) {
+            if (error.code === "23505") {
+                alert("Eleven finns redan i den klassen.");
+                return;
+            }
+
+            alert(error.message);
+            return;
+        }
+
+        loadAdminData();
+    }
+
+    async function removeStudentFromClass(rowId: string) {
+        const { error } = await supabase
+            .from("admin_class_students")
+            .delete()
+            .eq("id", rowId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        loadAdminData();
+    }
+
+    async function deleteClass(classId: string) {
+        const confirmed = window.confirm(
+            "Vill du ta bort klassen? Eleverna tas inte bort, bara själva klassmappen."
+        );
+
+        if (!confirmed) return;
+
+        const { error } = await supabase
+            .from("admin_classes")
+            .delete()
+            .eq("id", classId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        loadAdminData();
+    }
+
     const selectedProfile = profiles.find((profile) => profile.id === selectedUserId) || null;
+    const sortedProfiles = [...profiles]
+        .filter((profile) => !isStudentInAnyClass(profile.id))
+        .sort((a, b) =>
+            (a.username || "").localeCompare(b.username || "", "sv")
+        );
     const selectedSessions = sessions.filter((session) => session.user_id === selectedUserId);
     const selectedPosts = posts.filter((post) => post.user_id === selectedUserId);
 
@@ -215,33 +372,142 @@ export default function AdminPage() {
                 <section style={cardStyle}>
                     <h2>Användare</h2>
 
-                    {profiles.map((profile) => (
-                        <button
-                            key={profile.id}
-                            onClick={() => setSelectedUserId(profile.id)}
-                            style={{
-                                ...userButtonStyle,
-                                border:
-                                    selectedUserId === profile.id
-                                        ? "1px solid rgba(96, 165, 250, 0.8)"
-                                        : "1px solid rgba(148, 163, 184, 0.18)",
-                                background:
-                                    selectedUserId === profile.id
-                                        ? "rgba(37, 99, 235, 0.2)"
-                                        : "rgba(30, 41, 59, 0.7)",
-                            }}
-                        >
-                            <div>
-                                <strong>{profile.username || "Inget användarnamn"}</strong>
-                                <div style={{ color: "#94a3b8", fontSize: "12px", marginTop: "4px" }}>
-                                    {profile.created_at
-                                        ? new Date(profile.created_at).toLocaleDateString("sv-SE")
-                                        : "Okänt datum"}
-                                </div>
-                            </div>
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+                        <input
+                            value={newClassName}
+                            onChange={(event) => setNewClassName(event.target.value)}
+                            placeholder="Ny klass, t.ex. 8A"
+                            style={inputStyle}
+                        />
 
-                            {profile.is_admin && <span>Admin</span>}
+                        <button onClick={createClass} style={primaryButtonStyle}>
+                            Skapa klass
                         </button>
+                    </div>
+
+                    {adminClasses.length > 0 && (
+                        <div style={{ marginBottom: "20px" }}>
+                            <h3 style={{ marginBottom: "10px" }}>Klasser</h3>
+
+                            {adminClasses.map((adminClass) => {
+                                const studentsInClass = classStudents.filter(
+                                    (row) => row.class_id === adminClass.id
+                                );
+
+                                return (
+                                    <div key={adminClass.id} style={classBoxStyle}>
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                                gap: "8px",
+                                                marginBottom: "10px",
+                                            }}
+                                        >
+                                            <button
+                                                onClick={() => toggleClassOpen(adminClass.id)}
+                                                style={classFolderButtonStyle}
+                                            >
+                                                {openClassIds.includes(adminClass.id) ? "📂" : "📁"} {adminClass.name}
+                                            </button>
+
+                                            <button
+                                                onClick={() => deleteClass(adminClass.id)}
+                                                style={dangerSmallButtonStyle}
+                                            >
+                                                Ta bort
+                                            </button>
+                                        </div>
+
+                                        {openClassIds.includes(adminClass.id) && (
+                                            <>
+                                                {studentsInClass.length === 0 ? (
+                                                    <p style={{ color: "#94a3b8", margin: 0 }}>
+                                                        Inga elever i klassen ännu.
+                                                    </p>
+                                                ) : (
+                                                    studentsInClass.map((row) => {
+                                                        const student = profiles.find(
+                                                            (profile) => profile.id === row.student_id
+                                                        );
+
+                                                        return (
+                                                            <div key={row.id} style={classStudentRowStyle}>
+                                                                <button
+                                                                    onClick={() => setSelectedUserId(row.student_id)}
+                                                                    style={classStudentButtonStyle}
+                                                                >
+                                                                    {student?.username || "Okänd användare"}
+                                                                </button>
+
+                                                                <button
+                                                                    onClick={() => removeStudentFromClass(row.id)}
+                                                                    style={dangerSmallButtonStyle}
+                                                                >
+                                                                    ×
+                                                                </button>
+                                                            </div>
+                                                        );
+                                                    })
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    <h3>Övriga användare</h3>
+
+                    {sortedProfiles.map((profile) => (
+                        <div key={profile.id} style={{ marginBottom: "10px" }}>
+                            <button
+                                onClick={() => setSelectedUserId(profile.id)}
+                                style={{
+                                    ...userButtonStyle,
+                                    border:
+                                        selectedUserId === profile.id
+                                            ? "1px solid rgba(96, 165, 250, 0.8)"
+                                            : "1px solid rgba(148, 163, 184, 0.18)",
+                                    background:
+                                        selectedUserId === profile.id
+                                            ? "rgba(37, 99, 235, 0.2)"
+                                            : "rgba(30, 41, 59, 0.7)",
+                                }}
+                            >
+                                <div>
+                                    <strong>{profile.username || "Inget användarnamn"}</strong>
+                                    <div style={{ color: "#94a3b8", fontSize: "12px", marginTop: "4px" }}>
+                                        {profile.created_at
+                                            ? new Date(profile.created_at).toLocaleDateString("sv-SE")
+                                            : "Okänt datum"}
+                                    </div>
+                                </div>
+
+                                {profile.is_admin && <span>Admin</span>}
+                            </button>
+
+                            <select
+                                defaultValue=""
+                                onChange={(event) => {
+                                    addStudentToClass(profile.id, event.target.value);
+                                    event.currentTarget.value = "";
+                                }}
+                                style={selectStyle}
+                            >
+                                <option value="" disabled>
+                                    Lägg i klass...
+                                </option>
+
+                                {adminClasses.map((adminClass) => (
+                                    <option key={adminClass.id} value={adminClass.id}>
+                                        {adminClass.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     ))}
                 </section>
 
@@ -489,4 +755,83 @@ const postCardStyle = {
     background: "rgba(30, 41, 59, 0.72)",
     border: "1px solid rgba(148, 163, 184, 0.2)",
     marginBottom: "14px",
+};
+
+const inputStyle = {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: "12px",
+    border: "1px solid rgba(148, 163, 184, 0.35)",
+    background: "rgba(2, 6, 23, 0.75)",
+    color: "white",
+    boxSizing: "border-box" as const,
+};
+
+const primaryButtonStyle = {
+    padding: "10px 12px",
+    borderRadius: "12px",
+    border: "none",
+    background: "#2563eb",
+    color: "white",
+    fontWeight: "bold",
+    cursor: "pointer",
+    whiteSpace: "nowrap" as const,
+};
+
+const selectStyle = {
+    width: "100%",
+    marginTop: "6px",
+    padding: "9px 10px",
+    borderRadius: "10px",
+    border: "1px solid rgba(148, 163, 184, 0.25)",
+    background: "rgba(2, 6, 23, 0.75)",
+    color: "#e2e8f0",
+};
+
+const classBoxStyle = {
+    padding: "12px",
+    borderRadius: "14px",
+    background: "rgba(30, 41, 59, 0.65)",
+    border: "1px solid rgba(148, 163, 184, 0.2)",
+    marginBottom: "12px",
+};
+
+const classStudentRowStyle = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "8px",
+    marginTop: "8px",
+};
+
+const classStudentButtonStyle = {
+    flex: 1,
+    textAlign: "left" as const,
+    padding: "9px 10px",
+    borderRadius: "10px",
+    border: "1px solid rgba(148, 163, 184, 0.18)",
+    background: "rgba(15, 23, 42, 0.72)",
+    color: "#e2e8f0",
+    cursor: "pointer",
+};
+
+const dangerSmallButtonStyle = {
+    padding: "7px 9px",
+    borderRadius: "10px",
+    border: "1px solid rgba(248, 113, 113, 0.45)",
+    background: "rgba(239, 68, 68, 0.12)",
+    color: "#fecaca",
+    fontWeight: "bold",
+    cursor: "pointer",
+};
+
+const classFolderButtonStyle = {
+    border: "none",
+    background: "transparent",
+    color: "#e2e8f0",
+    fontWeight: "bold",
+    cursor: "pointer",
+    textAlign: "left" as const,
+    padding: 0,
+    fontSize: "15px",
 };
