@@ -2,9 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 export default function NavBar() {
   const pathname = usePathname();
+
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth event:", event);
+      console.log("Session:", session);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <nav
@@ -21,9 +36,24 @@ export default function NavBar() {
       }}
     >
       <NavItem href="/" label="🏠 Hem" active={pathname === "/"} />
-      <NavItem href="/kalender" label="📅 Kalender" active={pathname === "/kalender"} />
-      <NavItem href="/pepp" label="🔥 Pepp" active={pathname === "/pepp"} />
-      <NavItem href="/tips" label="💡 Tips" active={pathname === "/tips"} />
+
+      <NavItem
+        href="/kalender"
+        label="📅 Kalender"
+        active={pathname === "/kalender"}
+      />
+
+      <NavItem
+        href="/pepp"
+        label="🔥 Pepp"
+        active={pathname === "/pepp"}
+      />
+
+      <NavItem
+        href="/tips"
+        label="💡 Tips"
+        active={pathname === "/tips"}
+      />
 
       <NavItem
         href="/profil"

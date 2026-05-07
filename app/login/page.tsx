@@ -68,7 +68,7 @@ export default function LoginPage() {
     if (error) {
       alert(error.message);
     } else {
-      router.push("/kalender");
+      router.push("/");
     }
   }
 

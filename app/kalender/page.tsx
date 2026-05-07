@@ -25,6 +25,8 @@ type StudySession = {
     sort_order: number;
     start_time?: string | null;
     end_time?: string | null;
+    planning?: string | null;
+    planning_data?: any;
 };
 
 type Exam = {
@@ -36,7 +38,7 @@ type Exam = {
     created_at?: string;
 };
 
-type PopupMode = null | "session" | "exam";
+type PopupMode = null | "session" | "exam" | "copySession";
 
 function getStartOfWeek(offset: number) {
     const today = new Date();
@@ -77,6 +79,7 @@ export default function KalenderPage() {
     const [subject, setSubject] = useState("");
     const [minutes, setMinutes] = useState("");
     const [startTime, setStartTime] = useState("");
+    const [copyDate, setCopyDate] = useState("");
     const [isEditingSession, setIsEditingSession] = useState(false);
 
     const [goalHours, setGoalHours] = useState("");
@@ -290,6 +293,7 @@ export default function KalenderPage() {
         setSubject("");
         setMinutes("");
         setStartTime("");
+        setCopyDate("");
         setExamName("");
         setExamDate("");
         setExamColor(examColors[0].value);
@@ -385,6 +389,49 @@ export default function KalenderPage() {
         loadExams();
     }
 
+    async function copySession() {
+        if (!selectedSession || !subject || !minutes || !copyDate) return;
+
+        const { data: userData } = await supabase.auth.getUser();
+        const user = userData.user;
+
+        if (!user) {
+            window.location.href = "/login";
+            return;
+        }
+
+        const { data: sessionsSameDay } = await supabase
+            .from("study_sessions")
+            .select("sort_order")
+            .eq("user_id", user.id)
+            .eq("date", copyDate);
+
+        const nextSortOrder =
+            sessionsSameDay && sessionsSameDay.length > 0
+                ? Math.max(...sessionsSameDay.map((session) => session.sort_order ?? 0)) + 1
+                : 0;
+
+        const { error } = await supabase.from("study_sessions").insert({
+            user_id: user.id,
+            subject,
+            duration: Number(minutes),
+            date: copyDate,
+            status: "planned",
+            sort_order: nextSortOrder,
+            start_time: startTime || null,
+            planning: selectedSession.planning || null,
+            planning_data: selectedSession.planning_data || null,
+        });
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        closePopup();
+        loadSessions();
+    }
+
     async function updateSession() {
         if (!selectedSession || !subject || !minutes) return;
 
@@ -468,6 +515,7 @@ export default function KalenderPage() {
     }
 
     async function moveSessionToDate(session: StudySession, newDate: Date) {
+        if (session.status === "missed") return;
         const newDateString = formatDate(newDate);
 
         if (session.date === newDateString) return;
@@ -903,9 +951,15 @@ export default function KalenderPage() {
                                     {previewSessions.map((session) => (
                                         <div
                                             key={session.id}
-                                            draggable={session.status !== "done"}
+                                            draggable={session.status !== "done" && session.status !== "missed"}
                                             onDragStart={(e) => {
                                                 e.stopPropagation();
+
+                                                if (session.status === "done" || session.status === "missed") {
+                                                    e.preventDefault();
+                                                    return;
+                                                }
+
                                                 isDragging.current = true;
                                                 setDraggedSession(session);
                                             }}
@@ -1355,7 +1409,18 @@ export default function KalenderPage() {
                                                 Spara ändringar
                                             </button>
                                         ) : (
-                                            <>
+                                            <><button
+                                                onClick={() => {
+                                                    setPopupMode("copySession");
+                                                    setSubject(selectedSession.subject);
+                                                    setMinutes(String(selectedSession.duration));
+                                                    setStartTime(selectedSession.start_time || "");
+                                                    setCopyDate(selectedSession.date);
+                                                }}
+                                                style={optionButtonStyle()}
+                                            >
+                                                Kopiera studiepass
+                                            </button>
                                                 {selectedSession.status === "planned" && (
                                                     <>
                                                         <button
@@ -1458,7 +1523,76 @@ export default function KalenderPage() {
                             </>
                         )}
 
+                        {popupMode === "copySession" && selectedSession && (
+                            <>
+                                <p style={{ margin: 0 }}>
+                                    Kopiera från: {selectedSession.subject}
+                                </p>
 
+                                <input
+                                    placeholder="Ämne"
+                                    value={subject}
+                                    onChange={(e) => setSubject(e.target.value)}
+                                    style={{
+                                        padding: "12px",
+                                        borderRadius: "10px",
+                                        border: "1px solid rgba(148, 163, 184, 0.35)",
+                                        background: "rgba(2, 6, 23, 0.75)",
+                                        color: "#e2e8f0",
+                                        outline: "none",
+                                    }}
+                                />
+
+                                <input
+                                    placeholder="Minuter"
+                                    value={minutes}
+                                    onChange={(e) => setMinutes(e.target.value)}
+                                    style={{
+                                        padding: "12px",
+                                        borderRadius: "10px",
+                                        border: "1px solid rgba(148, 163, 184, 0.35)",
+                                        background: "rgba(2, 6, 23, 0.75)",
+                                        color: "#e2e8f0",
+                                        outline: "none",
+                                    }}
+                                />
+
+                                <input
+                                    type="date"
+                                    value={copyDate}
+                                    onChange={(e) => setCopyDate(e.target.value)}
+                                    style={{
+                                        padding: "12px",
+                                        borderRadius: "10px",
+                                        border: "1px solid rgba(148, 163, 184, 0.35)",
+                                        background: "rgba(2, 6, 23, 0.75)",
+                                        color: "#e2e8f0",
+                                        outline: "none",
+                                    }}
+                                />
+
+                                <input
+                                    type="time"
+                                    value={startTime}
+                                    onChange={(e) => setStartTime(e.target.value)}
+                                    style={{
+                                        padding: "12px",
+                                        borderRadius: "10px",
+                                        border: "1px solid rgba(148, 163, 184, 0.35)",
+                                        background: "rgba(2, 6, 23, 0.75)",
+                                        color: "#e2e8f0",
+                                        outline: "none",
+                                    }}
+                                />
+
+                                <button
+                                    onClick={copySession}
+                                    style={buttonStyle(true)}
+                                >
+                                    Skapa kopia
+                                </button>
+                            </>
+                        )}
 
                         {popupMode === "exam" && (
                             <>
