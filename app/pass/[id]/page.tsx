@@ -192,8 +192,10 @@ export default function PassPage() {
     const canEditTime = isEditMode && !["active", "paused", "done"].includes(sessionStatus);
 
     const secondsRef = useRef(0);
+    const endTimeRef = useRef<number | null>(null);
     const alarmAudioRef = useRef<HTMLAudioElement | null>(null);
     const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const lastSavedSecondRef = useRef<number | null>(null);
 
     const allChecklist = useMemo(
         () => data.blocks.flatMap((block) => block.checklist),
@@ -243,33 +245,42 @@ export default function PassPage() {
     useEffect(() => {
         if (!isRunning || !id) return;
 
+        if (!endTimeRef.current) {
+            endTimeRef.current = Date.now() + secondsRef.current * 1000;
+        }
+
         const interval = setInterval(async () => {
-            const { data: sessionStatus } = await supabase
-                .from("study_sessions")
-                .select("status")
-                .eq("id", id)
-                .single();
-
-            if (sessionStatus?.status !== "active") {
-                setIsRunning(false);
-                clearInterval(interval);
-                return;
-            }
-
-            const next = Math.max(secondsRef.current - 1, 0);
+            const next = getCurrentRemainingSeconds();
 
             secondsRef.current = next;
             setSecondsLeft(next);
 
-            const { error } = await supabase
-                .from("study_sessions")
-                .update({ remaining_seconds: next })
-                .eq("id", id);
+            if (
+                lastSavedSecondRef.current === null ||
+                Math.abs(lastSavedSecondRef.current - next) >= 15
+            ) {
+                lastSavedSecondRef.current = next;
 
-            if (error) console.error("Kunde inte spara tid:", error.message);
+                const { error } = await supabase
+                    .from("study_sessions")
+                    .update({ remaining_seconds: next })
+                    .eq("id", id);
+
+                if (error) console.error("Kunde inte spara tid:", error.message);
+            }
 
             if (next <= 0) {
                 clearInterval(interval);
+                endTimeRef.current = null;
+                setIsRunning(false);
+
+                await supabase
+                    .from("study_sessions")
+                    .update({
+                        remaining_seconds: 0,
+                        started_at: null,
+                    })
+                    .eq("id", id);
 
                 alarmAudioRef.current?.play();
                 triggerTimerDoneAnimation();
@@ -282,16 +293,20 @@ export default function PassPage() {
 
         return () => clearInterval(interval);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isRunning, id, plannedMinutes]);
+    }, [isRunning, id]);
 
     useEffect(() => {
         return () => {
             if (!id) return;
+
+            const remaining = getCurrentRemainingSeconds();
+
             supabase
                 .from("study_sessions")
-                .update({ remaining_seconds: secondsRef.current })
+                .update({ remaining_seconds: remaining })
                 .eq("id", id);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
     function scheduleSave(nextData: PlanningData) {
@@ -376,17 +391,52 @@ export default function PassPage() {
             .eq("status", "active")
             .neq("id", id);
 
+        const endTime = getEndTimeFromSession(session.started_at, startSeconds);
+        const adjustedStartSeconds = Math.max(
+            Math.ceil((endTime - Date.now()) / 1000),
+            0
+        );
+
+        setSecondsLeft(adjustedStartSeconds);
+        secondsRef.current = adjustedStartSeconds;
+        endTimeRef.current = Date.now() + adjustedStartSeconds * 1000;
+        lastSavedSecondRef.current = adjustedStartSeconds;
+
         await supabase
             .from("study_sessions")
             .update({
                 status: "active",
-                remaining_seconds: startSeconds,
+                remaining_seconds: adjustedStartSeconds,
+                started_at: new Date().toISOString(),
             })
             .eq("id", id);
 
         setSessionStatus("active");
 
         setIsRunning(true);
+    }
+
+    function getCurrentRemainingSeconds() {
+        if (!endTimeRef.current) return secondsRef.current;
+
+        return Math.max(
+            Math.ceil((endTimeRef.current - Date.now()) / 1000),
+            0
+        );
+    }
+
+    function getEndTimeFromSession(startedAt: string | null, remainingSeconds: number) {
+        if (!startedAt) {
+            return Date.now() + remainingSeconds * 1000;
+        }
+
+        const elapsedSeconds = Math.floor(
+            (Date.now() - new Date(startedAt).getTime()) / 1000
+        );
+
+        const adjustedRemaining = Math.max(remainingSeconds - elapsedSeconds, 0);
+
+        return Date.now() + adjustedRemaining * 1000;
     }
 
     function formatTime(seconds: number) {
@@ -417,6 +467,7 @@ export default function PassPage() {
                 status: "done",
                 duration: actualMinutes,
                 remaining_seconds: null,
+                started_at: null,
             })
             .eq("id", id);
 
@@ -440,24 +491,37 @@ export default function PassPage() {
 
     async function togglePause() {
         if (isRunning) {
+            const remaining = getCurrentRemainingSeconds();
+
+            secondsRef.current = remaining;
+            setSecondsLeft(remaining);
             setIsRunning(false);
+            endTimeRef.current = null;
+            lastSavedSecondRef.current = remaining;
 
             await supabase
                 .from("study_sessions")
                 .update({
                     status: "paused",
-                    remaining_seconds: secondsRef.current,
+                    remaining_seconds: remaining,
+                    started_at: null,
                 })
                 .eq("id", id);
 
             setSessionStatus("paused");
-
         } else {
+            endTimeRef.current = Date.now() + secondsRef.current * 1000;
+            lastSavedSecondRef.current = secondsRef.current;
+
             setIsRunning(true);
 
             await supabase
                 .from("study_sessions")
-                .update({ status: "active" })
+                .update({
+                    status: "active",
+                    remaining_seconds: secondsRef.current,
+                    started_at: new Date().toISOString(),
+                })
                 .eq("id", id);
 
             setSessionStatus("active");
@@ -465,14 +529,20 @@ export default function PassPage() {
     }
 
     async function stopEarly() {
-        const studiedSeconds = plannedMinutes * 60 - secondsRef.current;
+        const remaining = getCurrentRemainingSeconds();
+        const studiedSeconds = plannedMinutes * 60 - remaining;
         const actualMinutes = Math.max(1, Math.round(studiedSeconds / 60));
+
+        secondsRef.current = remaining;
+        setSecondsLeft(remaining);
+        endTimeRef.current = null;
 
         await supabase
             .from("study_sessions")
             .update({
                 status: "paused",
                 remaining_seconds: secondsRef.current,
+                started_at: null,
             })
             .eq("id", id);
 
@@ -689,6 +759,9 @@ export default function PassPage() {
 
     function openExtendModal() {
         setIsRunning(false);
+        endTimeRef.current = null;
+        secondsRef.current = 0;
+        setSecondsLeft(0);
         setExtraMinutes(10);
         setShowExtendModal(true);
     }
@@ -702,6 +775,9 @@ export default function PassPage() {
         setPlannedMinutes(newDuration);
         setSecondsLeft(addedSeconds);
         secondsRef.current = addedSeconds;
+        endTimeRef.current = Date.now() + addedSeconds * 1000;
+        lastSavedSecondRef.current = addedSeconds;
+
         setShowExtendModal(false);
         setIsRunning(true);
         setSessionStatus("active");
@@ -712,6 +788,7 @@ export default function PassPage() {
                 duration: newDuration,
                 remaining_seconds: addedSeconds,
                 status: "active",
+                started_at: new Date().toISOString(),
             })
             .eq("id", id);
     }
