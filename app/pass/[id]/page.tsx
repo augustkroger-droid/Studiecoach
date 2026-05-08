@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import NavBar from "@/components/NavBar";
@@ -181,14 +181,7 @@ export default function PassPage() {
     const [data, setData] = useState<PlanningData>(() => defaultPlanningData());
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
-    const [showEndModal, setShowEndModal] = useState(false);
-    const [pendingActualMinutes, setPendingActualMinutes] = useState<number | null>(null);
-    const [endReviewDraft, setEndReviewDraft] = useState<EndReview>({
-        rating: 0,
-        wentWell: "",
-        difficult: "",
-        nextFocus: "",
-    });
+
     const canEditTime = isEditMode && !["active", "paused", "done"].includes(sessionStatus);
 
     const secondsRef = useRef(0);
@@ -278,6 +271,7 @@ export default function PassPage() {
                     .from("study_sessions")
                     .update({
                         remaining_seconds: 0,
+                        status: "paused",
                         started_at: null,
                     })
                     .eq("id", id);
@@ -295,19 +289,6 @@ export default function PassPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isRunning, id]);
 
-    useEffect(() => {
-        return () => {
-            if (!id) return;
-
-            const remaining = getCurrentRemainingSeconds();
-
-            supabase
-                .from("study_sessions")
-                .update({ remaining_seconds: remaining })
-                .eq("id", id);
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [id]);
 
     function scheduleSave(nextData: PlanningData) {
         setData(nextData);
@@ -378,7 +359,6 @@ export default function PassPage() {
         setSecondsLeft(startSeconds);
         secondsRef.current = startSeconds;
         setData(nextPlanningData);
-        setEndReviewDraft(nextPlanningData.endReview);
 
         if (!isStudyMode) {
             setIsRunning(false);
@@ -445,9 +425,79 @@ export default function PassPage() {
         return `${min}:${sec.toString().padStart(2, "0")}`;
     }
 
+    const pauseSession = useCallback(async (updateUi = true) => {
+        if (!id) return;
+
+        const remaining = getCurrentRemainingSeconds();
+
+        secondsRef.current = remaining;
+        endTimeRef.current = null;
+        lastSavedSecondRef.current = remaining;
+
+        if (updateUi) {
+            setSecondsLeft(remaining);
+            setIsRunning(false);
+            setSessionStatus("paused");
+        }
+
+        await supabase
+            .from("study_sessions")
+            .update({
+                status: "paused",
+                remaining_seconds: remaining,
+                started_at: null,
+            })
+            .eq("id", id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id]);
+
+    useEffect(() => {
+        return () => {
+            pauseSession(false);
+        };
+    }, [pauseSession]);
+
+    useEffect(() => {
+        if (!isStudyMode) return;
+
+        async function handleInternalLinkClick(event: MouseEvent) {
+            if (event.defaultPrevented) return;
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+            const target = event.target as HTMLElement | null;
+            const link = target?.closest("a") as HTMLAnchorElement | null;
+
+            if (!link) return;
+            if (link.target && link.target !== "_self") return;
+
+            const href = link.getAttribute("href");
+            if (!href || href.startsWith("#")) return;
+
+            const url = new URL(href, window.location.href);
+
+            const isSameWebsite = url.origin === window.location.origin;
+            const isDifferentPage =
+                url.pathname !== window.location.pathname ||
+                url.search !== window.location.search;
+
+            if (!isSameWebsite || !isDifferentPage) return;
+
+            event.preventDefault();
+
+            await pauseSession(false);
+
+            router.push(url.pathname + url.search + url.hash);
+        }
+
+        document.addEventListener("click", handleInternalLinkClick, true);
+
+        return () => {
+            document.removeEventListener("click", handleInternalLinkClick, true);
+        };
+    }, [isStudyMode, router, pauseSession]);
+
     function openEndModal(actualMinutes: number) {
         setIsRunning(false);
-        setPendingActualMinutes(actualMinutes);
         completeSession(actualMinutes);
     }
 
@@ -491,24 +541,7 @@ export default function PassPage() {
 
     async function togglePause() {
         if (isRunning) {
-            const remaining = getCurrentRemainingSeconds();
-
-            secondsRef.current = remaining;
-            setSecondsLeft(remaining);
-            setIsRunning(false);
-            endTimeRef.current = null;
-            lastSavedSecondRef.current = remaining;
-
-            await supabase
-                .from("study_sessions")
-                .update({
-                    status: "paused",
-                    remaining_seconds: remaining,
-                    started_at: null,
-                })
-                .eq("id", id);
-
-            setSessionStatus("paused");
+            await pauseSession(true);
         } else {
             endTimeRef.current = Date.now() + secondsRef.current * 1000;
             lastSavedSecondRef.current = secondsRef.current;
