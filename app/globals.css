@@ -145,3 +145,43 @@ body {
     font-size: 14px !important;
   }
 }
+
+/* Hem - mobil */
+@media (max-width: 900px) {
+  .home-topbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    margin-bottom: 18px !important;
+  }
+
+  .home-logout-button {
+    margin-top: 0 !important;
+    width: 100%;
+  }
+
+  .home-header {
+    margin-bottom: 22px !important;
+  }
+
+  .home-header h1 {
+    font-size: 34px !important;
+  }
+
+  .home-header p {
+    font-size: 16px !important;
+    line-height: 1.55 !important;
+  }
+
+  .home-hero-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .home-next-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .home-bottom-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

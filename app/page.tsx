@@ -239,6 +239,7 @@ export default function Home() {
       }}
     >
       <div
+        className="home-topbar"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -250,6 +251,7 @@ export default function Home() {
 
 
         <button
+          className="home-logout-button"
           onClick={logout}
           style={{
             marginTop: "72px",
@@ -260,7 +262,7 @@ export default function Home() {
             borderRadius: "12px",
             cursor: "pointer",
             fontWeight: "bold",
-            
+
           }}
         >
           Logga ut
@@ -268,6 +270,7 @@ export default function Home() {
       </div>
       <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
       <header
+        className="home-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -300,6 +303,7 @@ export default function Home() {
       </header>
 
       <section
+        className="home-hero-grid"
         style={{
           display: "grid",
           gridTemplateColumns: "1.2fr 0.8fr",
@@ -310,6 +314,7 @@ export default function Home() {
       >
         <div style={heroCardStyle(theme)}>
           <div
+            className="home-next-grid"
             style={{
               display: "grid",
               gridTemplateColumns: "1fr 1fr",
@@ -424,6 +429,7 @@ export default function Home() {
       </section>
 
       <section
+        className="home-bottom-grid"
         style={{
           display: "grid",
           gridTemplateColumns: "1fr 360px",
