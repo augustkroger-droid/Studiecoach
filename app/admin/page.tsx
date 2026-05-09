@@ -12,6 +12,8 @@ type Profile = {
     is_admin?: boolean;
     created_at?: string;
     show_on_leaderboard?: boolean;
+    pepp_blocked_until?: string | null;
+    pepp_block_reason?: string | null;
 };
 
 type StudySession = {
@@ -117,7 +119,7 @@ export default function AdminPage() {
 
         const { data: profileData } = await supabase
             .from("profiles")
-            .select("id, username, is_admin, created_at, show_on_leaderboard")
+            .select("id, username, is_admin, created_at, show_on_leaderboard, pepp_blocked_until, pepp_block_reason")
             .order("username", { ascending: true });
 
         const { data: sessionData, error: sessionError } = await supabase
@@ -172,6 +174,54 @@ export default function AdminPage() {
 
     function getUsername(userId: string) {
         return profiles.find((profile) => profile.id === userId)?.username || "Okänd användare";
+    }
+
+    function isPeppBlocked(profile: Profile) {
+        if (!profile.pepp_blocked_until) return false;
+        return new Date(profile.pepp_blocked_until) > new Date();
+    }
+
+    async function blockUserFromPepp(userIdToBlock: string, days: number) {
+        const confirmed = window.confirm(`Blockera användaren från Pepp i ${days} dagar?`);
+        if (!confirmed) return;
+
+        const blockedUntil = new Date();
+        blockedUntil.setDate(blockedUntil.getDate() + days);
+
+        const { error } = await supabase
+            .from("profiles")
+            .update({
+                pepp_blocked_until: blockedUntil.toISOString(),
+                pepp_block_reason: "Blockerad av admin",
+            })
+            .eq("id", userIdToBlock);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        loadAdminData();
+    }
+
+    async function unblockUserFromPepp(userIdToUnblock: string) {
+        const confirmed = window.confirm("Ta bort Pepp-blockeringen?");
+        if (!confirmed) return;
+
+        const { error } = await supabase
+            .from("profiles")
+            .update({
+                pepp_blocked_until: null,
+                pepp_block_reason: null,
+            })
+            .eq("id", userIdToUnblock);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        loadAdminData();
     }
 
     function isStudentInAnyClass(studentId: string) {
@@ -382,11 +432,11 @@ export default function AdminPage() {
                 Se alla användare, deras profiler och alla Pepp-inlägg.
             </p>
 
-            <section style={adminLayoutStyle}>
+            <section className="admin-layout" style={adminLayoutStyle}>
                 <section style={cardStyle}>
                     <h2>Användare</h2>
 
-                    <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+                    <div className="admin-create-class-row" style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
                         <input
                             value={newClassName}
                             onChange={(event) => setNewClassName(event.target.value)}
@@ -538,10 +588,70 @@ export default function AdminPage() {
                                     <h2 style={{ margin: "6px 0 0", fontSize: "32px" }}>
                                         {selectedProfile.username || "Okänt användarnamn"}
                                     </h2>
+                                    <div
+                                        style={{
+                                            marginTop: "18px",
+                                            padding: "14px",
+                                            borderRadius: "16px",
+                                            background: isPeppBlocked(selectedProfile)
+                                                ? "rgba(239, 68, 68, 0.13)"
+                                                : "rgba(15, 23, 42, 0.65)",
+                                            border: isPeppBlocked(selectedProfile)
+                                                ? "1px solid rgba(248, 113, 113, 0.45)"
+                                                : "1px solid rgba(148, 163, 184, 0.22)",
+                                        }}
+                                    >
+                                        <strong>
+                                            {isPeppBlocked(selectedProfile)
+                                                ? "🚫 Blockerad från Pepp"
+                                                : "✅ Kan posta på Pepp"}
+                                        </strong>
+
+                                        {selectedProfile.pepp_blocked_until && (
+                                            <p style={{ margin: "6px 0 0", color: "#94a3b8", fontSize: "14px" }}>
+                                                Blockerad till:{" "}
+                                                {new Date(selectedProfile.pepp_blocked_until).toLocaleString("sv-SE")}
+                                            </p>
+                                        )}
+
+                                        <div className="admin-block-buttons" style={{ display: "flex", gap: "8px", marginTop: "12px", flexWrap: "wrap" }}>
+                                            {isPeppBlocked(selectedProfile) ? (
+                                                <button
+                                                    onClick={() => unblockUserFromPepp(selectedProfile.id)}
+                                                    style={primaryButtonStyle}
+                                                >
+                                                    Ta bort blockering
+                                                </button>
+                                            ) : (
+                                                <>
+                                                    <button
+                                                        onClick={() => blockUserFromPepp(selectedProfile.id, 1)}
+                                                        style={dangerSmallButtonStyle}
+                                                    >
+                                                        Blockera 1 dag
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => blockUserFromPepp(selectedProfile.id, 7)}
+                                                        style={dangerSmallButtonStyle}
+                                                    >
+                                                        Blockera 7 dagar
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => blockUserFromPepp(selectedProfile.id, 30)}
+                                                        style={dangerSmallButtonStyle}
+                                                    >
+                                                        Blockera 30 dagar
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             </section>
 
-                            <section style={gridStyle}>
+                            <section className="admin-stats-grid" style={gridStyle}>
                                 <StatCard title="Total studietid" value={formatHours(totalMinutes)} />
                                 <StatCard title="Genomförda pass" value={`${totalDonePasses}`} />
                                 <StatCard title="Aktiva studiedagar" value={`${activeDays}`} />

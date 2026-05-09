@@ -24,3 +24,79 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Mobilanpassning - grund */
+@media (max-width: 800px) {
+  main {
+    padding: 18px !important;
+    padding-bottom: 120px !important;
+  }
+
+  h1 {
+    font-size: 30px !important;
+    line-height: 1.15 !important;
+  }
+
+  h2 {
+    font-size: 22px !important;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  button {
+    min-height: 44px;
+  }
+
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+
+/* Admin - mobil */
+@media (max-width: 900px) {
+  .admin-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-create-class-row {
+    flex-direction: column !important;
+  }
+
+  .admin-create-class-row button {
+    width: 100%;
+  }
+
+  .admin-stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .admin-block-buttons {
+    flex-direction: column !important;
+  }
+
+  .admin-block-buttons button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .admin-stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

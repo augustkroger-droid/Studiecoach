@@ -102,6 +102,7 @@ export default function PeppPage() {
     const [comments, setComments] = useState<PostComment[]>([]);
     const [openCommentsPostId, setOpenCommentsPostId] = useState<string | null>(null);
     const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
+    const [hoveredLikesPostId, setHoveredLikesPostId] = useState<string | null>(null);
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
 
@@ -439,11 +440,16 @@ export default function PeppPage() {
         const confirmed = window.confirm("Ta bort kommentaren?");
         if (!confirmed) return;
 
-        const { error } = await supabase
+        let query = supabase
             .from("post_comments")
             .delete()
-            .eq("id", commentId)
-            .eq("user_id", userId);
+            .eq("id", commentId);
+
+        if (!myProfile?.is_admin) {
+            query = query.eq("user_id", userId);
+        }
+
+        const { error } = await query;
 
         if (error) {
             alert(error.message);
@@ -478,11 +484,16 @@ export default function PeppPage() {
         const confirmed = window.confirm("Vill du ta bort detta inlägg?");
         if (!confirmed) return;
 
-        const { error } = await supabase
+        let query = supabase
             .from("study_posts")
             .delete()
-            .eq("id", postId)
-            .eq("user_id", userId);
+            .eq("id", postId);
+
+        if (!myProfile?.is_admin) {
+            query = query.eq("user_id", userId);
+        }
+
+        const { error } = await query;
 
         if (error) {
             alert(error.message);
@@ -592,7 +603,7 @@ export default function PeppPage() {
                                             position: "relative",
                                         }}
                                     >
-                                        {post.user_id === userId && (
+                                        {(post.user_id === userId || myProfile?.is_admin) && (
                                             <button
                                                 onClick={() => deletePost(post.id)}
                                                 style={{
@@ -698,16 +709,13 @@ export default function PeppPage() {
                                                 {comments.filter((comment) => comment.post_id === post.id).length}
                                             </button>
 
-                                            <div style={{ position: "relative" }}>
+                                            <div
+                                                style={{ position: "relative" }}
+                                                onMouseEnter={() => setHoveredLikesPostId(post.id)}
+                                                onMouseLeave={() => setHoveredLikesPostId(null)}
+                                            >
                                                 <button
                                                     onClick={() => toggleLike(post.id)}
-                                                    title={
-                                                        postLikes.length === 0
-                                                            ? "Ingen har gillat ännu"
-                                                            : `Gillat av: ${postLikes
-                                                                .map((like) => getUsername(like.user_id))
-                                                                .join(", ")}`
-                                                    }
                                                     style={{
                                                         height: "44px",
                                                         minWidth: "72px",
@@ -731,6 +739,60 @@ export default function PeppPage() {
                                                 >
                                                     ❤️ {postLikes.length}
                                                 </button>
+
+                                                {hoveredLikesPostId === post.id && postLikes.length > 0 && (
+                                                    <div
+                                                        style={{
+                                                            position: "absolute",
+                                                            top: "54px",
+                                                            right: 0,
+                                                            minWidth: "190px",
+                                                            maxWidth: "240px",
+                                                            padding: "12px",
+                                                            borderRadius: "16px",
+                                                            background: "rgba(15, 23, 42, 0.96)",
+                                                            border: "1px solid rgba(148, 163, 184, 0.2)",
+                                                            boxShadow: "0 18px 40px rgba(0,0,0,0.45)",
+                                                            backdropFilter: "blur(10px)",
+                                                            zIndex: 20,
+                                                        }}
+                                                    >
+                                                        <div
+                                                            style={{
+                                                                fontSize: "13px",
+                                                                color: "#94a3b8",
+                                                                marginBottom: "8px",
+                                                                fontWeight: "bold",
+                                                            }}
+                                                        >
+                                                            Gillat av
+                                                        </div>
+
+                                                        <div
+                                                            style={{
+                                                                display: "flex",
+                                                                flexDirection: "column",
+                                                                gap: "8px",
+                                                            }}
+                                                        >
+                                                            {postLikes.map((like) => (
+                                                                <div
+                                                                    key={like.id}
+                                                                    style={{
+                                                                        padding: "8px 10px",
+                                                                        borderRadius: "10px",
+                                                                        background: "rgba(30, 41, 59, 0.72)",
+                                                                        color: "#e2e8f0",
+                                                                        fontWeight: "bold",
+                                                                        fontSize: "14px",
+                                                                    }}
+                                                                >
+                                                                    {getUsername(like.user_id)}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
@@ -804,7 +866,7 @@ export default function PeppPage() {
                                                                         </p>
                                                                     </div>
 
-                                                                    {comment.user_id === userId && (
+                                                                    {(comment.user_id === userId || myProfile?.is_admin) && (
                                                                         <button
                                                                             onClick={() =>
                                                                                 deleteComment(comment.id)
