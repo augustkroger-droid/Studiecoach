@@ -23,6 +23,7 @@ export default function NavBar() {
 
   return (
     <nav
+      className="main-navbar"
       style={{
         display: "flex",
         gap: "16px",
@@ -76,6 +77,7 @@ function NavItem({
   return (
     <Link
       href={href}
+      className="main-navbar-link"
       style={{
         padding: "8px 12px",
         borderRadius: "8px",

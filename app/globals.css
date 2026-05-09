@@ -121,3 +121,27 @@ body {
     font-size: 14px !important;
   }
 }
+
+/* Navbar - mobil */
+@media (max-width: 800px) {
+  .main-navbar {
+    width: 100% !important;
+    overflow-x: auto;
+    gap: 10px !important;
+    padding: 10px !important;
+
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .main-navbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .main-navbar-link {
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 10px 14px !important;
+    font-size: 14px !important;
+  }
+}
