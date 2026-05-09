@@ -376,3 +376,49 @@ body {
     display: block !important;
   }
 }
+
+/* Pepp - mobil/appkänsla */
+@media (max-width: 900px) {
+  .pepp-layout {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .pepp-post-actions {
+    gap: 10px !important;
+    align-items: stretch !important;
+  }
+
+  .pepp-post-actions>button,
+  .pepp-post-actions>div>button {
+    flex: 1;
+  }
+
+  .pepp-comment-form {
+    flex-direction: column !important;
+  }
+
+  .pepp-comment-form button {
+    width: 100% !important;
+  }
+
+  .pepp-friend-search {
+    flex-direction: column !important;
+  }
+
+  .pepp-friend-search button {
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .pepp-post-actions {
+    flex-direction: column !important;
+  }
+
+  .pepp-post-actions>button,
+  .pepp-post-actions>div,
+  .pepp-post-actions>div>button {
+    width: 100% !important;
+  }
+}

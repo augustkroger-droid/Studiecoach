@@ -581,7 +581,7 @@ export default function PeppPage() {
                 Peppa dina vänner och följ deras postade studiepass.
             </p>
 
-            <section style={layoutStyle}>
+            <section className="pepp-layout" style={layoutStyle}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
                     <section style={cardStyle(theme)}>
                         <h2 style={{ marginTop: 0 }}>Flöde</h2>
@@ -674,6 +674,7 @@ export default function PeppPage() {
                                             </p>
                                         )}
                                         <div
+                                            className="pepp-post-actions"
                                             style={{
                                                 marginTop: "18px",
                                                 display: "flex",
@@ -890,6 +891,7 @@ export default function PeppPage() {
 
                                                     {!myComment && (
                                                         <div
+                                                            className="pepp-comment-form"
                                                             style={{
                                                                 display: "flex",
                                                                 gap: "10px",
@@ -1000,7 +1002,7 @@ export default function PeppPage() {
                     <section style={cardStyle(theme)}>
                         <h2 style={{ marginTop: 0 }}>👥 Vänner</h2>
 
-                        <div style={{ display: "flex", gap: "8px" }}>
+                        <div className="pepp-friend-search" style={{ display: "flex", gap: "8px" }}>
                             <input
                                 placeholder="Sök användarnamn"
                                 value={searchUsername}
