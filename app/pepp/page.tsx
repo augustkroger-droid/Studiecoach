@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import NavBar from "@/components/NavBar";
 import { supabase } from "@/lib/supabase";
@@ -87,6 +87,14 @@ function toDateString(date: Date) {
 }
 
 export default function PeppPage() {
+    return (
+        <Suspense fallback={null}>
+            <PeppPageContent />
+        </Suspense>
+    );
+}
+
+function PeppPageContent() {
     const searchParams = useSearchParams();
     const [themeKey, setThemeKey] = useState<ThemeKey>("ocean");
 
