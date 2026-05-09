@@ -193,7 +193,7 @@ body {
     gap: 14px !important;
   }
 
-  .calendar-day-wrapper > div:first-child {
+  .calendar-day-wrapper>div:first-child {
     min-height: auto !important;
     max-height: none !important;
   }
@@ -243,5 +243,116 @@ body {
     max-height: 88vh !important;
     overflow-y: auto !important;
     border-radius: 22px 22px 18px 18px !important;
+  }
+}
+
+/* Egna ljusa ikoner för datum och tid */
+.date-time-field {
+  position: relative;
+  width: 100%;
+}
+
+.date-time-field input {
+  width: 100%;
+  padding-right: 46px !important;
+}
+
+.date-time-field input[type="date"]::-webkit-calendar-picker-indicator,
+.date-time-field input[type="time"]::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  cursor: pointer;
+  width: 44px;
+  height: 44px;
+  position: absolute;
+  right: 8px;
+}
+
+.date-time-field::after {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 18px;
+  opacity: 0.95;
+}
+
+.date-time-field.date-field::after {
+  content: "📅";
+}
+
+.date-time-field.time-field::after {
+  content: "🕒";
+}
+
+/* Studiepass-sidan - mobil/appkänsla */
+@media (max-width: 900px) {
+  .pass-page-shell {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .pass-title-section {
+    width: 100% !important;
+    margin-top: 18px !important;
+  }
+
+  .pass-title-section>div {
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .pass-title-section input {
+    font-size: 24px !important;
+  }
+
+  .pass-title-section div[style*="font-size: 28px"] {
+    font-size: 24px !important;
+  }
+
+  .pass-main-grid {
+    width: 100% !important;
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .pass-goal-time-card {
+    grid-template-columns: 1fr !important;
+  }
+
+  .pass-block-inner-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .pass-resource-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .pass-timer-card {
+    position: sticky !important;
+    top: 12px !important;
+    right: auto !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    margin: 12px 0 18px !important;
+    z-index: 30 !important;
+  }
+
+  .pass-timer-card div:first-child {
+    font-size: 38px !important;
+  }
+
+  .pass-modal-backdrop {
+    align-items: flex-end !important;
+    padding: 14px !important;
+  }
+
+  .pass-modal-card {
+    width: 100% !important;
+    max-width: 430px !important;
+    max-height: 88vh !important;
+    overflow-y: auto !important;
+    border-radius: 22px 22px 18px 18px !important;
+    box-sizing: border-box !important;
   }
 }

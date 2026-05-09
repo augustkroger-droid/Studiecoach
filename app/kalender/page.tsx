@@ -1474,19 +1474,21 @@ export default function KalenderPage() {
                                             }}
                                         />
 
-                                        <input
-                                            type="time"
-                                            value={startTime}
-                                            onChange={(e) => setStartTime(e.target.value)}
-                                            style={{
-                                                padding: "12px",
-                                                borderRadius: "10px",
-                                                border: "1px solid rgba(148, 163, 184, 0.35)",
-                                                background: "rgba(2, 6, 23, 0.75)",
-                                                color: "#e2e8f0",
-                                                outline: "none",
-                                            }}
-                                        />
+                                        <div className="date-time-field time-field">
+                                            <input
+                                                type="time"
+                                                value={startTime}
+                                                onChange={(e) => setStartTime(e.target.value)}
+                                                style={{
+                                                    padding: "12px",
+                                                    borderRadius: "10px",
+                                                    border: "1px solid rgba(148, 163, 184, 0.35)",
+                                                    background: "rgba(2, 6, 23, 0.75)",
+                                                    color: "#e2e8f0",
+                                                    outline: "none",
+                                                }}
+                                            />
+                                        </div>
                                     </>
                                 )}
 
@@ -1648,33 +1650,37 @@ export default function KalenderPage() {
                                     }}
                                 />
 
-                                <input
-                                    type="date"
-                                    value={copyDate}
-                                    onChange={(e) => setCopyDate(e.target.value)}
-                                    style={{
-                                        padding: "12px",
-                                        borderRadius: "10px",
-                                        border: "1px solid rgba(148, 163, 184, 0.35)",
-                                        background: "rgba(2, 6, 23, 0.75)",
-                                        color: "#e2e8f0",
-                                        outline: "none",
-                                    }}
-                                />
+                                <div className="date-time-field date-field">
+                                    <input
+                                        type="date"
+                                        value={copyDate}
+                                        onChange={(e) => setCopyDate(e.target.value)}
+                                        style={{
+                                            padding: "12px",
+                                            borderRadius: "10px",
+                                            border: "1px solid rgba(148, 163, 184, 0.35)",
+                                            background: "rgba(2, 6, 23, 0.75)",
+                                            color: "#e2e8f0",
+                                            outline: "none",
+                                        }}
+                                    />
+                                </div>
 
-                                <input
-                                    type="time"
-                                    value={startTime}
-                                    onChange={(e) => setStartTime(e.target.value)}
-                                    style={{
-                                        padding: "12px",
-                                        borderRadius: "10px",
-                                        border: "1px solid rgba(148, 163, 184, 0.35)",
-                                        background: "rgba(2, 6, 23, 0.75)",
-                                        color: "#e2e8f0",
-                                        outline: "none",
-                                    }}
-                                />
+                                <div className="date-time-field time-field">
+                                    <input
+                                        type="time"
+                                        value={startTime}
+                                        onChange={(e) => setStartTime(e.target.value)}
+                                        style={{
+                                            padding: "12px",
+                                            borderRadius: "10px",
+                                            border: "1px solid rgba(148, 163, 184, 0.35)",
+                                            background: "rgba(2, 6, 23, 0.75)",
+                                            color: "#e2e8f0",
+                                            outline: "none",
+                                        }}
+                                    />
+                                </div>
 
                                 <button
                                     onClick={copySession}
@@ -1703,19 +1709,21 @@ export default function KalenderPage() {
                                             }}
                                         />
 
-                                        <input
-                                            type="date"
-                                            value={examDate}
-                                            onChange={(e) => setExamDate(e.target.value)}
-                                            style={{
-                                                padding: "12px",
-                                                borderRadius: "10px",
-                                                border: "1px solid rgba(148, 163, 184, 0.35)",
-                                                background: "rgba(2, 6, 23, 0.75)",
-                                                color: "#e2e8f0",
-                                                outline: "none",
-                                            }}
-                                        />
+                                        <div className="date-time-field date-field">
+                                            <input
+                                                type="date"
+                                                value={examDate}
+                                                onChange={(e) => setExamDate(e.target.value)}
+                                                style={{
+                                                    padding: "12px",
+                                                    borderRadius: "10px",
+                                                    border: "1px solid rgba(148, 163, 184, 0.35)",
+                                                    background: "rgba(2, 6, 23, 0.75)",
+                                                    color: "#e2e8f0",
+                                                    outline: "none",
+                                                }}
+                                            />
+                                        </div>
 
                                         <div>
                                             <p style={{ margin: "0 0 8px", fontWeight: "bold" }}>Färg</p>

@@ -915,7 +915,7 @@ export default function PassPage() {
                 color: theme.text,
             }}
         >
-            <div style={{ minWidth: isStudyMode ? "1280px" : "1180px" }}>
+            <div className="pass-page-shell" style={{ minWidth: isStudyMode ? "1280px" : "1180px" }}>
                 <NavBar />
 
                 <ThemePicker
@@ -926,6 +926,7 @@ export default function PassPage() {
 
                 {isStudyMode && (
                     <div
+                        className="pass-timer-card"
                         style={{
                             position: "fixed",
                             top: "24px",
@@ -976,6 +977,7 @@ export default function PassPage() {
                 )}
 
                 <section
+                    className="pass-title-section"
                     style={{
                         marginTop: "24px",
                         width: isStudyMode ? "1040px" : "1180px",
@@ -1049,6 +1051,7 @@ export default function PassPage() {
                 </section>
 
                 <section
+                    className="pass-main-grid"
                     style={{
                         display: "grid",
                         gridTemplateColumns: "760px 340px",
@@ -1059,6 +1062,7 @@ export default function PassPage() {
                 >
                     <div style={{ display: "flex", flexDirection: "column", gap: "18px", minWidth: 0 }}>
                         <div
+                            className="pass-goal-time-card"
                             style={{
                                 ...cardStyle,
                                 padding: "18px",
@@ -1183,6 +1187,7 @@ export default function PassPage() {
                                         <p style={{ margin: "8px 0 14px", color: "#94a3b8" }}>{block.subtitle}</p>
 
                                         <div
+                                            className="pass-block-inner-grid"
                                             style={{
                                                 display: "grid",
                                                 gridTemplateColumns: "1fr 290px",
@@ -1349,6 +1354,7 @@ export default function PassPage() {
                             </div>
 
                             <div
+                                className="pass-resource-grid"
                                 style={{
                                     display: "grid",
                                     gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
@@ -1677,6 +1683,7 @@ export default function PassPage() {
 
             {showExtendModal && (
                 <div
+                    className="pass-modal-backdrop"
                     style={{
                         position: "fixed",
                         inset: 0,
@@ -1689,6 +1696,7 @@ export default function PassPage() {
                     }}
                 >
                     <div
+                        className="pass-modal-card"
                         style={{
                             width: "480px",
                             maxWidth: "calc(100vw - 48px)",
@@ -1772,6 +1780,7 @@ export default function PassPage() {
 
             {showPostPopup && finishedSession && (
                 <div
+                    className="pass-modal-backdrop"
                     style={{
                         position: "fixed",
                         inset: 0,
@@ -1783,6 +1792,7 @@ export default function PassPage() {
                     }}
                 >
                     <div
+                        className="pass-modal-card"
                         style={{
                             width: "360px",
                             background: "#0f172a",
