@@ -19,13 +19,19 @@
   }
 }
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Mobilanpassning - grund */
+/* Grund: mobil */
 @media (max-width: 800px) {
   main {
     padding: 18px !important;
@@ -61,47 +67,7 @@ body {
   }
 }
 
-html,
-body {
-  max-width: 100%;
-  overflow-x: hidden;
-}
-
-
-/* Admin - mobil */
-@media (max-width: 900px) {
-  .admin-layout {
-    grid-template-columns: 1fr !important;
-  }
-
-  .admin-create-class-row {
-    flex-direction: column !important;
-  }
-
-  .admin-create-class-row button {
-    width: 100%;
-  }
-
-  .admin-stats-grid {
-    grid-template-columns: 1fr 1fr !important;
-  }
-
-  .admin-block-buttons {
-    flex-direction: column !important;
-  }
-
-  .admin-block-buttons button {
-    width: 100%;
-  }
-}
-
-@media (max-width: 520px) {
-  .admin-stats-grid {
-    grid-template-columns: 1fr !important;
-  }
-}
-
-/* Theme picker - mobil */
+/* Theme picker */
 @media (max-width: 800px) {
   .theme-picker {
     position: static !important;
@@ -122,14 +88,13 @@ body {
   }
 }
 
-/* Navbar - mobil */
+/* Navbar */
 @media (max-width: 800px) {
   .main-navbar {
     width: 100% !important;
     overflow-x: auto;
     gap: 10px !important;
     padding: 10px !important;
-
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
@@ -146,107 +111,7 @@ body {
   }
 }
 
-/* Hem - mobil */
-@media (max-width: 900px) {
-  .home-topbar {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    gap: 12px !important;
-    margin-bottom: 18px !important;
-  }
-
-  .home-logout-button {
-    margin-top: 0 !important;
-    width: 100%;
-  }
-
-  .home-header {
-    margin-bottom: 22px !important;
-  }
-
-  .home-header h1 {
-    font-size: 34px !important;
-  }
-
-  .home-header p {
-    font-size: 16px !important;
-    line-height: 1.55 !important;
-  }
-
-  .home-hero-grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .home-next-grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .home-bottom-grid {
-    grid-template-columns: 1fr !important;
-  }
-}
-
-/* Kalender - mobil */
-@media (max-width: 1000px) {
-  .calendar-grid {
-    grid-template-columns: 1fr !important;
-    gap: 14px !important;
-  }
-
-  .calendar-day-wrapper>div:first-child {
-    min-height: auto !important;
-    max-height: none !important;
-  }
-
-  .calendar-floating-panels {
-    position: static !important;
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-    gap: 14px !important;
-    margin-top: 20px !important;
-    z-index: auto !important;
-  }
-
-  .calendar-goal-card {
-    width: 100% !important;
-    box-sizing: border-box !important;
-  }
-
-  .calendar-exam-card {
-    position: static !important;
-    width: 100% !important;
-    max-height: none !important;
-    box-sizing: border-box !important;
-    overflow: visible !important;
-  }
-
-  .calendar-week-nav {
-    justify-content: space-between !important;
-    gap: 8px !important;
-    padding: 8px 0 !important;
-  }
-
-  .calendar-week-nav button {
-    padding: 10px 8px !important;
-    border-radius: 12px !important;
-    background: rgba(15, 23, 42, 0.45) !important;
-  }
-
-  .calendar-popup-backdrop {
-    align-items: flex-end !important;
-    padding: 14px !important;
-  }
-
-  .calendar-popup-card {
-    width: 100% !important;
-    max-width: 420px !important;
-    max-height: 88vh !important;
-    overflow-y: auto !important;
-    border-radius: 22px 22px 18px 18px !important;
-  }
-}
-
-/* Egna ljusa ikoner för datum och tid */
+/* Datum- och tidsfält */
 .date-time-field {
   position: relative;
   width: 100%;
@@ -285,7 +150,100 @@ body {
   content: "🕒";
 }
 
-/* Studiepass-sidan - mobil/appkänsla */
+/* Hem */
+@media (max-width: 900px) {
+  .home-topbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    margin-bottom: 18px !important;
+  }
+
+  .home-logout-button {
+    margin-top: 0 !important;
+    width: 100%;
+  }
+
+  .home-header {
+    margin-bottom: 22px !important;
+  }
+
+  .home-header h1 {
+    font-size: 34px !important;
+  }
+
+  .home-header p {
+    font-size: 16px !important;
+    line-height: 1.55 !important;
+  }
+
+  .home-hero-grid,
+  .home-next-grid,
+  .home-bottom-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Kalender */
+@media (max-width: 1000px) {
+  .calendar-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  .calendar-day-wrapper > div:first-child {
+    min-height: auto !important;
+    max-height: none !important;
+  }
+
+  .calendar-floating-panels {
+    position: static !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+    margin-top: 20px !important;
+    z-index: auto !important;
+  }
+
+  .calendar-goal-card,
+  .calendar-exam-card {
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .calendar-exam-card {
+    position: static !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .calendar-week-nav {
+    justify-content: space-between !important;
+    gap: 8px !important;
+    padding: 8px 0 !important;
+  }
+
+  .calendar-week-nav button {
+    padding: 10px 8px !important;
+    border-radius: 12px !important;
+    background: rgba(15, 23, 42, 0.45) !important;
+  }
+
+  .calendar-popup-backdrop {
+    align-items: flex-end !important;
+    padding: 14px !important;
+  }
+
+  .calendar-popup-card {
+    width: 100% !important;
+    max-width: 420px !important;
+    max-height: 88vh !important;
+    overflow-y: auto !important;
+    border-radius: 22px 22px 18px 18px !important;
+  }
+}
+
+/* Studiepass */
 @media (max-width: 900px) {
   .pass-page-shell {
     min-width: 0 !important;
@@ -297,35 +255,26 @@ body {
     margin-top: 18px !important;
   }
 
-  .pass-title-section>div {
+  .pass-title-section > div {
     width: 100% !important;
     box-sizing: border-box !important;
   }
 
-  .pass-title-section input {
-    font-size: 24px !important;
-  }
-
+  .pass-title-section input,
   .pass-title-section div[style*="font-size: 28px"] {
     font-size: 24px !important;
   }
 
-  .pass-main-grid {
-    width: 100% !important;
-    grid-template-columns: 1fr !important;
-    gap: 16px !important;
-  }
-
-  .pass-goal-time-card {
-    grid-template-columns: 1fr !important;
-  }
-
-  .pass-block-inner-grid {
-    grid-template-columns: 1fr !important;
-  }
-
+  .pass-main-grid,
+  .pass-goal-time-card,
+  .pass-block-inner-grid,
   .pass-resource-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .pass-main-grid {
+    width: 100% !important;
+    gap: 16px !important;
   }
 
   .pass-timer-card {
@@ -340,6 +289,23 @@ body {
 
   .pass-timer-card div:first-child {
     font-size: 38px !important;
+  }
+
+  .pass-resource-actions {
+    flex-direction: column !important;
+    width: 100% !important;
+    margin-top: 12px !important;
+  }
+
+  .pass-resource-actions button,
+  .pass-resource-actions label {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    text-align: center !important;
+  }
+
+  .pass-resource-actions label {
+    display: block !important;
   }
 
   .pass-modal-backdrop {
@@ -357,27 +323,7 @@ body {
   }
 }
 
-/* Studiepass - resursknappar på mobil */
-@media (max-width: 900px) {
-  .pass-resource-actions {
-    flex-direction: column !important;
-    width: 100% !important;
-    margin-top: 12px !important;
-  }
-
-  .pass-resource-actions button,
-  .pass-resource-actions label {
-    width: 100% !important;
-    box-sizing: border-box !important;
-    text-align: center !important;
-  }
-
-  .pass-resource-actions label {
-    display: block !important;
-  }
-}
-
-/* Pepp - mobil/appkänsla */
+/* Pepp */
 @media (max-width: 900px) {
   .pepp-layout {
     grid-template-columns: 1fr !important;
@@ -389,23 +335,17 @@ body {
     align-items: stretch !important;
   }
 
-  .pepp-post-actions>button,
-  .pepp-post-actions>div>button {
+  .pepp-post-actions > button,
+  .pepp-post-actions > div > button {
     flex: 1;
   }
 
-  .pepp-comment-form {
-    flex-direction: column !important;
-  }
-
-  .pepp-comment-form button {
-    width: 100% !important;
-  }
-
+  .pepp-comment-form,
   .pepp-friend-search {
     flex-direction: column !important;
   }
 
+  .pepp-comment-form button,
   .pepp-friend-search button {
     width: 100% !important;
   }
@@ -416,14 +356,56 @@ body {
     flex-direction: column !important;
   }
 
-  .pepp-post-actions>button,
-  .pepp-post-actions>div,
-  .pepp-post-actions>div>button {
+  .pepp-post-actions > button,
+  .pepp-post-actions > div,
+  .pepp-post-actions > div > button {
     width: 100% !important;
   }
 }
 
-/* Login - mobil/appkänsla */
+/* Admin */
+@media (max-width: 900px) {
+  .admin-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-create-class-row,
+  .admin-block-buttons {
+    flex-direction: column !important;
+  }
+
+  .admin-create-class-row button,
+  .admin-block-buttons button {
+    width: 100%;
+  }
+
+  .admin-stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .admin-stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Login */
+.login-page {
+  flex-direction: column !important;
+}
+
+.login-theme-picker {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.login-theme-picker .theme-picker {
+  position: static !important;
+  margin: 18px auto 0 !important;
+}
+
 @media (max-width: 800px) {
   .login-card {
     padding: 22px !important;
@@ -448,20 +430,4 @@ body {
   .login-form button {
     min-height: 48px !important;
   }
-}
-
-/* Login - placera tema under kortet */
-.login-page {
-  flex-direction: column !important;
-}
-
-.login-theme-picker {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-}
-
-.login-theme-picker .theme-picker {
-  position: static !important;
-  margin: 18px auto 0 !important;
 }
