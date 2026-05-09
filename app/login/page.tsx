@@ -83,6 +83,7 @@ export default function LoginPage() {
 
   return (
     <main
+      className="login-page"
       style={{
         minHeight: "100vh",
         display: "flex",

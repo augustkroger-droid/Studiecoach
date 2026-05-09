@@ -450,13 +450,18 @@ body {
   }
 }
 
-/* Login - tema längst ner */
+/* Login - placera tema under kortet */
+.login-page {
+  flex-direction: column !important;
+}
+
 .login-theme-picker {
-  margin-top: 18px;
+  width: 100%;
   display: flex;
   justify-content: center;
 }
 
 .login-theme-picker .theme-picker {
   position: static !important;
+  margin: 18px auto 0 !important;
 }
