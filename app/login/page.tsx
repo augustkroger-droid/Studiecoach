@@ -96,6 +96,7 @@ export default function LoginPage() {
     >
       <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
       <section
+        className="login-card"
         style={{
           width: "100%",
           maxWidth: "420px",
@@ -131,7 +132,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+        <div className="login-form" style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
           <label style={{ fontWeight: "bold", color: "#cbd5e1" }}>
             Användarnamn
           </label>

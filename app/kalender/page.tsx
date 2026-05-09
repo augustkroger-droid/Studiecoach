@@ -98,7 +98,11 @@ export default function KalenderPage() {
     const [examDate, setExamDate] = useState("");
     const [examColor, setExamColor] = useState(examColors[0].value);
     const [isEditingExam, setIsEditingExam] = useState(false);
-    const [isExamBoxMinimized, setIsExamBoxMinimized] = useState(false);
+    const [isExamBoxMinimized, setIsExamBoxMinimized] = useState(() => {
+        if (typeof window === "undefined") return false;
+
+        return localStorage.getItem("calendarExamBoxMinimized") === "true";
+    });
 
     const [draggedSession, setDraggedSession] = useState<StudySession | null>(null);
     const [dragOverSessionId, setDragOverSessionId] = useState<string | null>(null);
@@ -118,6 +122,11 @@ export default function KalenderPage() {
 
     function getCurrentWeekStartString() {
         return formatDate(getStartOfWeek(0));
+    }
+
+    function updateExamBoxMinimized(nextValue: boolean) {
+        setIsExamBoxMinimized(nextValue);
+        localStorage.setItem("calendarExamBoxMinimized", String(nextValue));
     }
 
     async function loadWeeklyGoal() {
@@ -1187,7 +1196,7 @@ export default function KalenderPage() {
                     className="calendar-exam-card"
                     onClick={() => {
                         if (isExamBoxMinimized) {
-                            setIsExamBoxMinimized(false);
+                            updateExamBoxMinimized(false);
                         }
                     }}
                     style={{
@@ -1246,7 +1255,7 @@ export default function KalenderPage() {
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setIsExamBoxMinimized(true);
+                                        updateExamBoxMinimized(true);
                                     }}
                                     style={{
                                         width: "38px",

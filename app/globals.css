@@ -422,3 +422,30 @@ body {
     width: 100% !important;
   }
 }
+
+/* Login - mobil/appkänsla */
+@media (max-width: 800px) {
+  .login-card {
+    padding: 22px !important;
+    border-radius: 24px !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .login-card h1 {
+    font-size: 28px !important;
+  }
+
+  .login-card p {
+    font-size: 15px !important;
+  }
+
+  .login-form {
+    gap: 12px !important;
+  }
+
+  .login-form input,
+  .login-form button {
+    min-height: 48px !important;
+  }
+}
