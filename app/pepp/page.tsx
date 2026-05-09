@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import NavBar from "@/components/NavBar";
 import { supabase } from "@/lib/supabase";
 import { getSavedTheme, THEMES, ThemeKey } from "@/lib/themes";
@@ -86,6 +87,7 @@ function toDateString(date: Date) {
 }
 
 export default function PeppPage() {
+    const searchParams = useSearchParams();
     const [themeKey, setThemeKey] = useState<ThemeKey>("ocean");
 
     useEffect(() => {
@@ -103,6 +105,7 @@ export default function PeppPage() {
     const [openCommentsPostId, setOpenCommentsPostId] = useState<string | null>(null);
     const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
     const [hoveredLikesPostId, setHoveredLikesPostId] = useState<string | null>(null);
+    const [highlightedPostId, setHighlightedPostId] = useState<string | null>(null);
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
 
@@ -117,6 +120,31 @@ export default function PeppPage() {
     useEffect(() => {
         loadEverything();
     }, []);
+
+    useEffect(() => {
+        const postId = searchParams.get("post");
+
+        if (!postId || loading) return;
+
+        setHighlightedPostId(postId);
+
+        setTimeout(() => {
+            const element = document.getElementById(`pepp-post-${postId}`);
+
+            if (element) {
+                element.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                });
+            }
+        }, 300);
+
+        const timeout = setTimeout(() => {
+            setHighlightedPostId(null);
+        }, 3500);
+
+        return () => clearTimeout(timeout);
+    }, [searchParams, loading]);
 
     async function loadEverything() {
         const { data: userData } = await supabase.auth.getUser();
@@ -396,6 +424,16 @@ export default function PeppPage() {
                 alert(error.message);
                 return;
             }
+
+            const post = posts.find((post) => post.id === postId);
+
+            if (post) {
+                await createNotification({
+                    postId,
+                    postOwnerId: post.user_id,
+                    type: "like",
+                });
+            }
         }
 
         loadLikes();
@@ -426,6 +464,16 @@ export default function PeppPage() {
         if (error) {
             alert(error.message);
             return;
+        }
+
+        const post = posts.find((post) => post.id === postId);
+
+        if (post) {
+            await createNotification({
+                postId,
+                postOwnerId: post.user_id,
+                type: "comment",
+            });
         }
 
         setCommentInputs((current) => ({
@@ -473,6 +521,40 @@ export default function PeppPage() {
         }
 
         setShowOnLeaderboard(nextValue);
+    }
+
+    async function createNotification({
+        postId,
+        postOwnerId,
+        type,
+    }: {
+        postId: string;
+        postOwnerId: string;
+        type: "like" | "comment";
+    }) {
+        if (!userId) return;
+        if (postOwnerId === userId) return;
+
+        const actorName = myProfile?.username || "Någon";
+
+        const message =
+            type === "like"
+                ? `${actorName} har gillat ditt studiepass`
+                : `${actorName} har kommenterat på ditt studiepass`;
+
+        const { error } = await supabase
+            .from("notifications")
+            .insert({
+                user_id: postOwnerId,
+                actor_id: userId,
+                post_id: postId,
+                type,
+                message,
+            });
+
+        if (error) {
+            console.error(error.message);
+        }
     }
 
     function getUsername(profileId: string) {
@@ -597,10 +679,13 @@ export default function PeppPage() {
 
                                 return (
                                     <article
+                                        id={`pepp-post-${post.id}`}
+                                        className={highlightedPostId === post.id ? "pepp-highlight-post" : ""}
                                         key={post.id}
                                         style={{
                                             ...postCardStyle,
                                             position: "relative",
+                                            transition: "box-shadow 0.3s ease, outline 0.3s ease",
                                         }}
                                     >
                                         {(post.user_id === userId || myProfile?.is_admin) && (

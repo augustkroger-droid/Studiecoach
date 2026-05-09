@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import NotificationBell from "@/components/NotificationBell";
 
 export default function NavBar() {
   const pathname = usePathname();
@@ -61,6 +62,7 @@ export default function NavBar() {
         label="👤 Profil"
         active={pathname === "/profil"}
       />
+      <NotificationBell />
     </nav>
   );
 }
