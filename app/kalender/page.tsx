@@ -98,6 +98,7 @@ export default function KalenderPage() {
     const [examDate, setExamDate] = useState("");
     const [examColor, setExamColor] = useState(examColors[0].value);
     const [isEditingExam, setIsEditingExam] = useState(false);
+    const [isExamBoxMinimized, setIsExamBoxMinimized] = useState(false);
 
     const [draggedSession, setDraggedSession] = useState<StudySession | null>(null);
     const [dragOverSessionId, setDragOverSessionId] = useState<string | null>(null);
@@ -1180,90 +1181,165 @@ export default function KalenderPage() {
                     )}
                 </section>
                 <aside
+                    onClick={() => {
+                        if (isExamBoxMinimized) {
+                            setIsExamBoxMinimized(false);
+                        }
+                    }}
                     style={{
                         position: "fixed",
                         right: "24px",
                         bottom: "20px",
-                        width: "330px",
-                        maxHeight: "48vh",
-                        overflowY: "auto",
+                        width: isExamBoxMinimized ? "190px" : "330px",
+                        maxHeight: isExamBoxMinimized ? "74px" : "48vh",
+                        overflowY: isExamBoxMinimized ? "hidden" : "auto",
                         background: theme.card,
                         border: `1px solid ${theme.border}`,
-                        borderRadius: "20px",
-                        padding: "18px",
+                        borderRadius: "22px",
+                        padding: isExamBoxMinimized ? "14px 16px" : "18px",
                         boxShadow: "0 25px 60px rgba(0,0,0,0.45)",
                         backdropFilter: "blur(12px)",
+                        cursor: isExamBoxMinimized ? "pointer" : "default",
+                        transition: "all 0.25s ease",
                     }}
                 >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: "12px",
+                        }}
+                    >
                         <div>
-                            <h2 style={{ margin: 0, fontSize: "20px" }}>📝 Prov</h2>
-                            <p style={{ margin: "4px 0 0", color: "#94a3b8", fontSize: "13px" }}>
-                                Kommande prov
+                            <h2
+                                style={{
+                                    margin: 0,
+                                    fontSize: isExamBoxMinimized ? "17px" : "20px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                }}
+                            >
+                                📝 Prov
+                            </h2>
+
+                            <p
+                                style={{
+                                    margin: "4px 0 0",
+                                    color: "#94a3b8",
+                                    fontSize: "13px",
+                                }}
+                            >
+                                {isExamBoxMinimized
+                                    ? `${upcomingExams.length} kommande`
+                                    : "Kommande prov"}
                             </p>
                         </div>
 
-                        <button
-                            onClick={() => {
-                                const today = new Date();
-                                setSelectedDate(today);
-                                setSelectedSession(null);
-                                setSelectedExam(null);
-                                setPopupMode("exam");
-                                setExamName("");
-                                setExamDate(formatDate(today));
-                                setExamColor(examColors[0].value);
-                                setIsEditingExam(true);
-                            }}
-                            style={{
-                                width: "38px",
-                                height: "38px",
-                                borderRadius: "12px",
-                                border: "none",
-                                background: "#2563eb",
-                                color: "white",
-                                cursor: "pointer",
-                                fontWeight: "bold",
-                                fontSize: "22px",
-                                lineHeight: "38px",
-                            }}
-                            title="Lägg till prov"
-                        >
-                            +
-                        </button>
-                    </div>
-
-                    <div style={{ marginTop: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                        {upcomingExams.length === 0 ? (
-                            <p style={{ color: "#94a3b8", margin: 0, fontSize: "14px" }}>
-                                Inga prov inlagda ännu.
-                            </p>
-                        ) : (
-                            upcomingExams.map((exam) => (
+                        {!isExamBoxMinimized && (
+                            <div style={{ display: "flex", gap: "8px" }}>
                                 <button
-                                    key={exam.id}
-                                    onClick={() => openExamPopup(exam)}
-                                    style={{
-                                        background: exam.color,
-                                        color: "#ffffff",
-                                        border: "1px solid rgba(255,255,255,0.22)",
-                                        borderRadius: "14px",
-                                        padding: "12px",
-                                        textAlign: "left",
-                                        cursor: "pointer",
-                                        boxShadow: "0 10px 22px rgba(0,0,0,0.3)",
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsExamBoxMinimized(true);
                                     }}
+                                    style={{
+                                        width: "38px",
+                                        height: "38px",
+                                        borderRadius: "12px",
+                                        border: "1px solid rgba(148, 163, 184, 0.3)",
+                                        background: "rgba(30, 41, 59, 0.85)",
+                                        color: "#e2e8f0",
+                                        cursor: "pointer",
+                                        fontWeight: "bold",
+                                        fontSize: "18px",
+                                    }}
+                                    title="Minimera provlistan"
                                 >
-                                    <div style={{ fontWeight: "800", fontSize: "15px" }}>
-                                        {exam.name} – {formatDaysUntilExam(exam.date)}
-                                    </div>
-                                    <div style={{ opacity: 0.72, marginTop: "4px", fontSize: "13px", fontWeight: "bold" }}>
-                                        {formatExamDate(exam.date)}
-                                    </div>
+                                    −
                                 </button>
-                            ))
+
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        const today = new Date();
+                                        setSelectedDate(today);
+                                        setSelectedSession(null);
+                                        setSelectedExam(null);
+                                        setPopupMode("exam");
+                                        setExamName("");
+                                        setExamDate(formatDate(today));
+                                        setExamColor(examColors[0].value);
+                                        setIsEditingExam(true);
+                                    }}
+                                    style={{
+                                        width: "38px",
+                                        height: "38px",
+                                        borderRadius: "12px",
+                                        border: "none",
+                                        background: "#2563eb",
+                                        color: "white",
+                                        cursor: "pointer",
+                                        fontWeight: "bold",
+                                        fontSize: "22px",
+                                        lineHeight: "38px",
+                                    }}
+                                    title="Lägg till prov"
+                                >
+                                    +
+                                </button>
+                            </div>
                         )}
                     </div>
+
+                    {!isExamBoxMinimized && (
+                        <div
+                            style={{
+                                marginTop: "14px",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "10px",
+                            }}
+                        >
+                            {upcomingExams.length === 0 ? (
+                                <p style={{ color: "#94a3b8", margin: 0, fontSize: "14px" }}>
+                                    Inga prov inlagda ännu.
+                                </p>
+                            ) : (
+                                upcomingExams.map((exam) => (
+                                    <button
+                                        key={exam.id}
+                                        onClick={() => openExamPopup(exam)}
+                                        style={{
+                                            background: exam.color,
+                                            color: "#ffffff",
+                                            border: "1px solid rgba(255,255,255,0.22)",
+                                            borderRadius: "14px",
+                                            padding: "12px",
+                                            textAlign: "left",
+                                            cursor: "pointer",
+                                            boxShadow: "0 10px 22px rgba(0,0,0,0.3)",
+                                        }}
+                                    >
+                                        <div style={{ fontWeight: "800", fontSize: "15px" }}>
+                                            {exam.name} – {formatDaysUntilExam(exam.date)}
+                                        </div>
+                                        <div
+                                            style={{
+                                                opacity: 0.72,
+                                                marginTop: "4px",
+                                                fontSize: "13px",
+                                                fontWeight: "bold",
+                                            }}
+                                        >
+                                            {formatExamDate(exam.date)}
+                                        </div>
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                    )}
                 </aside>
             </div>
 
