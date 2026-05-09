@@ -19,6 +19,7 @@ export default function ThemePicker({
 
     return (
         <div
+            className="theme-picker"
             style={{
                 position: "fixed",
                 top: "20px",

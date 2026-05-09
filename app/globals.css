@@ -100,3 +100,24 @@ body {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* Theme picker - mobil */
+@media (max-width: 800px) {
+  .theme-picker {
+    position: static !important;
+    width: fit-content;
+    margin: 14px 0 18px auto;
+    padding: 8px 10px !important;
+    gap: 8px !important;
+  }
+
+  .theme-picker select {
+    min-height: 38px !important;
+    width: auto !important;
+    font-size: 14px !important;
+  }
+
+  .theme-picker span {
+    font-size: 14px !important;
+  }
+}
