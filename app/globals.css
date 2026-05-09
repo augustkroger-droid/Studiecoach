@@ -449,3 +449,14 @@ body {
     min-height: 48px !important;
   }
 }
+
+/* Login - tema längst ner */
+.login-theme-picker {
+  margin-top: 18px;
+  display: flex;
+  justify-content: center;
+}
+
+.login-theme-picker .theme-picker {
+  position: static !important;
+}
