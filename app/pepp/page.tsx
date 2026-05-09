@@ -43,6 +43,14 @@ type Like = {
     user_id: string;
 };
 
+type PostComment = {
+    id: string;
+    post_id: string;
+    user_id: string;
+    comment: string;
+    created_at: string;
+};
+
 function formatHours(minutes: number) {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
@@ -91,6 +99,9 @@ export default function PeppPage() {
 
     const [posts, setPosts] = useState<StudyPost[]>([]);
     const [likes, setLikes] = useState<Like[]>([]);
+    const [comments, setComments] = useState<PostComment[]>([]);
+    const [openCommentsPostId, setOpenCommentsPostId] = useState<string | null>(null);
+    const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
 
@@ -158,6 +169,7 @@ export default function PeppPage() {
         await Promise.all([
             loadProfiles(isAdmin, Array.from(profileIds)),
             loadLikes(),
+            loadComments(),
             loadWeeklyGoal(user.id),
         ]);
 
@@ -232,6 +244,20 @@ export default function PeppPage() {
         }
 
         setLikes(data || []);
+    }
+
+    async function loadComments() {
+        const { data, error } = await supabase
+            .from("post_comments")
+            .select("*")
+            .order("created_at", { ascending: true });
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setComments(data || []);
     }
 
     async function loadWeeklyGoal(currentUserId: string) {
@@ -374,6 +400,59 @@ export default function PeppPage() {
         loadLikes();
     }
 
+    async function addComment(postId: string) {
+        const text = commentInputs[postId]?.trim();
+
+        if (!text) return;
+
+        const existingComment = comments.find(
+            (comment) => comment.post_id === postId && comment.user_id === userId
+        );
+
+        if (existingComment) {
+            alert("Du har redan kommenterat detta inlägg.");
+            return;
+        }
+
+        const { error } = await supabase
+            .from("post_comments")
+            .insert({
+                post_id: postId,
+                user_id: userId,
+                comment: text,
+            });
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setCommentInputs((current) => ({
+            ...current,
+            [postId]: "",
+        }));
+
+        loadComments();
+    }
+
+    async function deleteComment(commentId: string) {
+        const confirmed = window.confirm("Ta bort kommentaren?");
+        if (!confirmed) return;
+
+        const { error } = await supabase
+            .from("post_comments")
+            .delete()
+            .eq("id", commentId)
+            .eq("user_id", userId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        loadComments();
+    }
+
     async function toggleLeaderboardVisibility() {
         const nextValue = !showOnLeaderboard;
 
@@ -511,7 +590,6 @@ export default function PeppPage() {
                                         style={{
                                             ...postCardStyle,
                                             position: "relative",
-                                            paddingBottom: "70px",
                                         }}
                                     >
                                         {post.user_id === userId && (
@@ -586,31 +664,207 @@ export default function PeppPage() {
                                         )}
                                         <div
                                             style={{
-                                                position: "absolute",
-                                                bottom: "18px",
-                                                right: "18px",
+                                                marginTop: "18px",
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
                                             }}
                                         >
                                             <button
-                                                onClick={() => toggleLike(post.id)}
+                                                onClick={() =>
+                                                    setOpenCommentsPostId(
+                                                        openCommentsPostId === post.id ? null : post.id
+                                                    )
+                                                }
                                                 style={{
                                                     height: "42px",
-                                                    padding: "0 14px",
+                                                    padding: "0 16px",
                                                     borderRadius: "999px",
-                                                    background: likedByMe
-                                                        ? "rgba(239, 68, 68, 0.18)"
-                                                        : "rgba(15, 23, 42, 0.7)",
-                                                    color: likedByMe ? "#fecaca" : "white",
-                                                    border: likedByMe
-                                                        ? "1px solid rgba(248, 113, 113, 0.55)"
-                                                        : "1px solid rgba(148, 163, 184, 0.3)",
+                                                    background:
+                                                        openCommentsPostId === post.id
+                                                            ? "rgba(37, 99, 235, 0.2)"
+                                                            : "rgba(15, 23, 42, 0.75)",
+                                                    color: "#e2e8f0",
+                                                    border:
+                                                        openCommentsPostId === post.id
+                                                            ? "1px solid rgba(96, 165, 250, 0.45)"
+                                                            : "1px solid rgba(148, 163, 184, 0.24)",
                                                     cursor: "pointer",
                                                     fontWeight: "bold",
+                                                    transition: "0.2s ease",
                                                 }}
                                             >
-                                                ❤️ {postLikes.length}
+                                                💬 Kommentarer{" "}
+                                                {comments.filter((comment) => comment.post_id === post.id).length}
                                             </button>
+
+                                            <div style={{ position: "relative" }}>
+                                                <button
+                                                    onClick={() => toggleLike(post.id)}
+                                                    title={
+                                                        postLikes.length === 0
+                                                            ? "Ingen har gillat ännu"
+                                                            : `Gillat av: ${postLikes
+                                                                .map((like) => getUsername(like.user_id))
+                                                                .join(", ")}`
+                                                    }
+                                                    style={{
+                                                        height: "44px",
+                                                        minWidth: "72px",
+                                                        padding: "0 16px",
+                                                        borderRadius: "999px",
+                                                        background: likedByMe
+                                                            ? "rgba(239, 68, 68, 0.16)"
+                                                            : "rgba(15, 23, 42, 0.72)",
+                                                        color: likedByMe ? "#fecaca" : "#ffffff",
+                                                        border: likedByMe
+                                                            ? "1px solid rgba(248, 113, 113, 0.42)"
+                                                            : "1px solid rgba(148, 163, 184, 0.22)",
+                                                        cursor: "pointer",
+                                                        fontWeight: "bold",
+                                                        fontSize: "16px",
+                                                        boxShadow: likedByMe
+                                                            ? "0 0 20px rgba(239,68,68,0.12)"
+                                                            : "none",
+                                                        transition: "0.2s ease",
+                                                    }}
+                                                >
+                                                    ❤️ {postLikes.length}
+                                                </button>
+                                            </div>
                                         </div>
+
+                                        {openCommentsPostId === post.id && (() => {
+                                            const postComments = comments.filter(
+                                                (comment) => comment.post_id === post.id
+                                            );
+
+                                            const myComment = postComments.find(
+                                                (comment) => comment.user_id === userId
+                                            );
+
+                                            return (
+                                                <div
+                                                    style={{
+                                                        marginTop: "18px",
+                                                        paddingTop: "18px",
+                                                        borderTop: "1px solid rgba(148, 163, 184, 0.16)",
+                                                        display: "flex",
+                                                        flexDirection: "column",
+                                                        gap: "12px",
+                                                    }}
+                                                >
+                                                    {postComments.length === 0 ? (
+                                                        <p
+                                                            style={{
+                                                                margin: 0,
+                                                                color: "#94a3b8",
+                                                                fontSize: "14px",
+                                                            }}
+                                                        >
+                                                            Inga kommentarer ännu.
+                                                        </p>
+                                                    ) : (
+                                                        postComments.map((comment) => (
+                                                            <div
+                                                                key={comment.id}
+                                                                style={{
+                                                                    padding: "12px 14px",
+                                                                    borderRadius: "14px",
+                                                                    background: "rgba(15, 23, 42, 0.72)",
+                                                                    border:
+                                                                        "1px solid rgba(148, 163, 184, 0.14)",
+                                                                }}
+                                                            >
+                                                                <div
+                                                                    style={{
+                                                                        display: "flex",
+                                                                        justifyContent: "space-between",
+                                                                        alignItems: "flex-start",
+                                                                        gap: "12px",
+                                                                    }}
+                                                                >
+                                                                    <div>
+                                                                        <strong
+                                                                            style={{
+                                                                                fontSize: "14px",
+                                                                            }}
+                                                                        >
+                                                                            {getUsername(comment.user_id)}
+                                                                        </strong>
+
+                                                                        <p
+                                                                            style={{
+                                                                                margin: "6px 0 0",
+                                                                                color: "#e2e8f0",
+                                                                                lineHeight: 1.45,
+                                                                            }}
+                                                                        >
+                                                                            {comment.comment}
+                                                                        </p>
+                                                                    </div>
+
+                                                                    {comment.user_id === userId && (
+                                                                        <button
+                                                                            onClick={() =>
+                                                                                deleteComment(comment.id)
+                                                                            }
+                                                                            style={{
+                                                                                border: "none",
+                                                                                background: "transparent",
+                                                                                color: "#fca5a5",
+                                                                                cursor: "pointer",
+                                                                                fontWeight: "bold",
+                                                                                fontSize: "13px",
+                                                                            }}
+                                                                        >
+                                                                            Ta bort
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    )}
+
+                                                    {!myComment && (
+                                                        <div
+                                                            style={{
+                                                                display: "flex",
+                                                                gap: "10px",
+                                                                marginTop: "4px",
+                                                            }}
+                                                        >
+                                                            <input
+                                                                placeholder="Skriv en kommentar..."
+                                                                value={commentInputs[post.id] || ""}
+                                                                onChange={(e) =>
+                                                                    setCommentInputs((current) => ({
+                                                                        ...current,
+                                                                        [post.id]: e.target.value,
+                                                                    }))
+                                                                }
+                                                                style={{
+                                                                    ...inputStyle,
+                                                                    background: "rgba(15, 23, 42, 0.72)",
+                                                                }}
+                                                            />
+
+                                                            <button
+                                                                onClick={() => addComment(post.id)}
+                                                                style={{
+                                                                    ...smallButtonStyle(theme),
+                                                                    padding: "0 18px",
+                                                                    borderRadius: "12px",
+                                                                    whiteSpace: "nowrap",
+                                                                }}
+                                                            >
+                                                                Skicka
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                     </article>
                                 );
                             })
