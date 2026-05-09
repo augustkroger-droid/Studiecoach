@@ -812,7 +812,7 @@ export default function KalenderPage() {
                 Planera, flytta och genomför dina studiepass vecka för vecka.
             </p>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "16px", margin: "20px 0" }}>
+            <div className="calendar-week-nav" style={{ display: "flex", alignItems: "center", gap: "16px", margin: "20px 0" }}>
                 <button
                     onClick={() => setWeekOffset(weekOffset - 1)}
                     onDragOver={(e) => {
@@ -855,6 +855,7 @@ export default function KalenderPage() {
             </div>
 
             <section
+                className="calendar-grid"
                 style={{
                     display: "grid",
                     gridTemplateColumns: "repeat(7, 1fr)",
@@ -905,7 +906,7 @@ export default function KalenderPage() {
                     }
 
                     return (
-                        <div key={day}>
+                        <div className="calendar-day-wrapper" key={day}>
                             <div
                                 onClick={() => openAddPopup(date)}
                                 onDragOver={(e) => e.preventDefault()}
@@ -1063,6 +1064,7 @@ export default function KalenderPage() {
                 })}
             </section>
             <div
+                className="calendar-floating-panels"
                 style={{
                     position: "fixed",
                     left: "20px",
@@ -1071,6 +1073,7 @@ export default function KalenderPage() {
                 }}
             >
                 <section
+                    className="calendar-goal-card"
                     style={{
                         width: "320px",
                         padding: "18px",
@@ -1181,6 +1184,7 @@ export default function KalenderPage() {
                     )}
                 </section>
                 <aside
+                    className="calendar-exam-card"
                     onClick={() => {
                         if (isExamBoxMinimized) {
                             setIsExamBoxMinimized(false);
@@ -1345,6 +1349,7 @@ export default function KalenderPage() {
 
             {popupOpen && (
                 <div
+                    className="calendar-popup-backdrop"
                     onClick={closePopup}
                     style={{
                         position: "fixed",
@@ -1357,6 +1362,7 @@ export default function KalenderPage() {
                     }}
                 >
                     <div
+                        className="calendar-popup-card"
                         onClick={(e) => e.stopPropagation()}
                         style={{
                             background: "#0f172a",
