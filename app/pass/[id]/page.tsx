@@ -437,25 +437,34 @@ export default function PassPage() {
         if (updateUi) {
             setSecondsLeft(remaining);
             setIsRunning(false);
-            setSessionStatus("paused");
+
+            if (sessionStatus !== "planned") {
+                setSessionStatus("paused");
+            }
+        }
+
+        const updateData: any = {
+            remaining_seconds: remaining,
+            started_at: null,
+        };
+
+        if (sessionStatus !== "planned") {
+            updateData.status = "paused";
         }
 
         await supabase
             .from("study_sessions")
-            .update({
-                status: "paused",
-                remaining_seconds: remaining,
-                started_at: null,
-            })
+            .update(updateData)
             .eq("id", id);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [id]);
+    }, [id, sessionStatus]);
 
     useEffect(() => {
         return () => {
-            pauseSession(false);
+            if (isStudyMode && isRunning) {
+                pauseSession(false);
+            }
         };
-    }, [pauseSession]);
+    }, [isStudyMode, isRunning, pauseSession]);
 
     useEffect(() => {
         if (!isStudyMode) return;
