@@ -94,7 +94,6 @@ export default function LoginPage() {
         color: theme.text,
       }}
     >
-      <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
       <section
         className="login-card"
         style={{
@@ -185,6 +184,10 @@ export default function LoginPage() {
           </button>
         </div>
       </section>
+
+      <div className="login-theme-picker">
+        <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
+      </div>
     </main>
   );
 }
