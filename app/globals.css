@@ -356,3 +356,23 @@ body {
     box-sizing: border-box !important;
   }
 }
+
+/* Studiepass - resurser på mobil */
+@media (max-width: 900px) {
+  .pass-resource-grid {
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .pass-resource-grid>div {
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .pass-resource-grid a {
+    display: block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
