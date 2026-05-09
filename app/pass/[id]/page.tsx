@@ -1335,7 +1335,7 @@ export default function PassPage() {
                                 <h2 style={{ margin: 0, fontSize: "20px" }}>Resurser</h2>
 
                                 {!readOnly && (
-                                    <div style={{ display: "flex", gap: "8px" }}>
+                                    <div className="pass-resource-actions" style={{ display: "flex", gap: "8px" }}>
                                         <button onClick={addLink} style={smallButton} type="button">
                                             + Lägg till länk
                                         </button>

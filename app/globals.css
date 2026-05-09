@@ -357,22 +357,22 @@ body {
   }
 }
 
-/* Studiepass - resurser på mobil */
+/* Studiepass - resursknappar på mobil */
 @media (max-width: 900px) {
-  .pass-resource-grid {
+  .pass-resource-actions {
+    flex-direction: column !important;
     width: 100% !important;
-    box-sizing: border-box !important;
+    margin-top: 12px !important;
   }
 
-  .pass-resource-grid>div {
+  .pass-resource-actions button,
+  .pass-resource-actions label {
     width: 100% !important;
     box-sizing: border-box !important;
+    text-align: center !important;
   }
 
-  .pass-resource-grid a {
-    display: block;
-    max-width: 100%;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+  .pass-resource-actions label {
+    display: block !important;
   }
 }
