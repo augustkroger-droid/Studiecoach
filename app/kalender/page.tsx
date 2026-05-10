@@ -54,6 +54,7 @@ type AssignedStudyTemplate = {
     status: "available" | "used";
     created_at: string;
     used_at?: string | null;
+    admin_username?: string | null;
 };
 
 type PopupMode = null | "session" | "exam" | "copySession";
@@ -311,19 +312,42 @@ export default function KalenderPage() {
 
         if (!user) return;
 
-        const { data, error } = await supabase
+        const { data: templatesData, error: templatesError } = await supabase
             .from("assigned_study_templates")
             .select("*")
             .eq("student_id", user.id)
             .eq("status", "available")
             .order("created_at", { ascending: false });
 
-        if (error) {
-            alert(error.message);
+        if (templatesError) {
+            alert(templatesError.message);
             return;
         }
 
-        setAssignedTemplates(data || []);
+        const adminIds = Array.from(
+            new Set((templatesData || []).map((template) => template.admin_id))
+        );
+
+        const { data: adminsData, error: adminsError } = await supabase
+            .from("profiles")
+            .select("id, username")
+            .in("id", adminIds);
+
+        if (adminsError) {
+            alert(adminsError.message);
+            return;
+        }
+
+        const adminsById = new Map(
+            (adminsData || []).map((admin) => [admin.id, admin.username])
+        );
+
+        const templatesWithAdminNames = (templatesData || []).map((template) => ({
+            ...template,
+            admin_username: adminsById.get(template.admin_id) || null,
+        }));
+
+        setAssignedTemplates(templatesWithAdminNames);
     }
 
     async function deleteAssignedTemplate(templateId: string) {
@@ -1580,6 +1604,16 @@ export default function KalenderPage() {
                                                 >
                                                     {template.subject}
                                                     {template.area ? ` · ${template.area}` : ""} · {template.duration} min
+                                                </div>
+
+                                                <div
+                                                    style={{
+                                                        marginTop: "3px",
+                                                        fontSize: "11px",
+                                                        opacity: 0.72,
+                                                    }}
+                                                >
+                                                    Skickat av {template.admin_username || "lärare"}
                                                 </div>
 
                                                 {isExpanded && (
