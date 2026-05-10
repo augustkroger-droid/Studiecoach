@@ -16,6 +16,9 @@ type StudySession = {
 
 type Profile = {
     username: string;
+    default_study_routine?: string | null;
+    default_self_note?: string | null;
+    username_locked?: boolean | null;
 };
 
 const weekDays = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
@@ -58,6 +61,11 @@ export default function ProfilPage() {
     const [profile, setProfile] = useState<Profile | null>(null);
     const [sessions, setSessions] = useState<StudySession[]>([]);
     const [loading, setLoading] = useState(true);
+    const [defaultStudyRoutine, setDefaultStudyRoutine] = useState("");
+    const [defaultSelfNote, setDefaultSelfNote] = useState("");
+    const [savingDefaults, setSavingDefaults] = useState(false);
+    const [usernameInput, setUsernameInput] = useState("");
+    const [savingUsername, setSavingUsername] = useState(false);
 
     useEffect(() => {
         loadProfile();
@@ -74,7 +82,7 @@ export default function ProfilPage() {
 
         const { data: profileData } = await supabase
             .from("profiles")
-            .select("username")
+            .select("username, default_study_routine, default_self_note, username_locked")
             .eq("id", user.id)
             .single();
 
@@ -88,9 +96,96 @@ export default function ProfilPage() {
             return;
         }
 
-        setProfile(profileData);
+        setUsernameInput(profileData?.username || "");
+        setDefaultStudyRoutine(profileData?.default_study_routine || "");
+        setDefaultSelfNote(profileData?.default_self_note || "");
         setSessions(sessionData || []);
         setLoading(false);
+    }
+
+    async function saveDefaultStudySettings() {
+        const { data: userData } = await supabase.auth.getUser();
+        const user = userData.user;
+
+        if (!user) return;
+
+        setSavingDefaults(true);
+
+        const { error } = await supabase
+            .from("profiles")
+            .update({
+                default_study_routine: defaultStudyRoutine,
+                default_self_note: defaultSelfNote,
+            })
+            .eq("id", user.id);
+
+        setSavingDefaults(false);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        alert("Standardtexter sparade!");
+    }
+
+    async function saveUsername() {
+        const nextUsername = usernameInput.trim();
+
+        if (!nextUsername) return;
+
+        if (nextUsername.length < 3) {
+            alert("Användarnamnet måste vara minst 3 tecken.");
+            return;
+        }
+
+        const { data: userData } = await supabase.auth.getUser();
+        const user = userData.user;
+
+        if (!user) return;
+
+        setSavingUsername(true);
+
+        const { data: existingUser } = await supabase
+            .from("profiles")
+            .select("id")
+            .ilike("username", nextUsername)
+            .neq("id", user.id)
+            .maybeSingle();
+
+        if (existingUser) {
+            setSavingUsername(false);
+            alert("Det användarnamnet är redan upptaget.");
+            return;
+        }
+
+        const { data: updatedProfile, error } = await supabase
+            .from("profiles")
+            .update({
+                username: nextUsername,
+            })
+            .eq("id", user.id)
+            .eq("username_locked", false)
+            .select("username")
+            .maybeSingle();
+
+        setSavingUsername(false);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        if (!updatedProfile) {
+            alert("Ditt användarnamn är låst. Kontakta admin om du vill ändra det.");
+            return;
+        }
+
+        setProfile((current) =>
+            current ? { ...current, username: nextUsername } : current
+        );
+
+        alert("Användarnamn sparat!");
     }
 
     const doneSessions = sessions.filter((session) => session.status === "done");
@@ -180,73 +275,199 @@ export default function ProfilPage() {
             <NavBar />
             <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
 
-            <h1 style={{ fontSize: "36px", marginBottom: "4px" }}>👤 Profil</h1>
-            <p style={{ marginTop: 0, color: "#94a3b8" }}>
-                Se din statistik och dina framsteg.
-            </p>
+            <div
+                className="profile-layout"
+                style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 340px",
+                    gap: "22px",
+                    alignItems: "start",
+                }}
+            >
+                <div style={{ minWidth: 0 }}>
+                    <h1 style={{ fontSize: "36px", marginBottom: "4px" }}>👤 Profil</h1>
+                    <p style={{ marginTop: 0, color: "#94a3b8" }}>
+                        Se din statistik och dina framsteg.
+                    </p>
 
-            <section style={profileCardStyle(theme)}>
-                <div>
-                    <p style={{ margin: 0, color: "#94a3b8" }}>Användarnamn</p>
-                    <h2 style={{ margin: "6px 0 0", fontSize: "32px" }}>
-                        {profile?.username || "Okänt användarnamn"}
-                    </h2>
-                </div>
-            </section>
+                    <section style={profileCardStyle(theme)}>
+                        <div>
+                            <p style={{ margin: 0, color: "#94a3b8" }}>Användarnamn</p>
 
-            <section style={gridStyle}>
-                <StatCard theme={theme} title="Total studietid" value={formatHours(totalMinutes)} />
-                <StatCard theme={theme} title="Genomförda pass" value={`${totalDonePasses}`} />
-                <StatCard theme={theme} title="Aktiva studiedagar" value={`${activeDays}`} />
-                <StatCard theme={theme} title="Snitt per aktiv dag" value={formatHours(averagePerActiveDay)} />
-                <StatCard theme={theme} title="Fokusnivå" value={`${focusLevel}%`} />
-                <StatCard
-                    theme={theme}
-                    title="Mest studerade ämne"
-                    value={mostStudiedSubject ? mostStudiedSubject[0] : "Inget ännu"}
-                    subValue={mostStudiedSubject ? formatHours(mostStudiedSubject[1]) : ""}
-                />
-            </section>
+                            {profile?.username_locked ? (
+                                <>
+                                    <h2 style={{ margin: "6px 0 0", fontSize: "32px" }}>
+                                        {profile?.username || "Okänt användarnamn"}
+                                    </h2>
 
-            <section style={chartCardStyle(theme)}>
-                <h2 style={{ marginTop: 0 }}>Snitt per veckodag senaste månaden</h2>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    {averageMinutesPerWeekday.map((minutes, index) => (
-                        <div key={weekDays[index]}>
-                            <div
-                                style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    marginBottom: "6px",
-                                    fontWeight: "bold",
-                                }}
-                            >
-                                <span>{weekDays[index]}</span>
-                                <span>{formatHours(minutes)}</span>
-                            </div>
-
-                            <div
-                                style={{
-                                    height: "14px",
-                                    background: "rgba(148, 163, 184, 0.2)",
-                                    borderRadius: "999px",
-                                    overflow: "hidden",
-                                }}
-                            >
+                                    <p style={{ color: "#fca5a5", marginBottom: 0 }}>
+                                        Ditt användarnamn är låst. Kontakta admin om du vill ändra det.
+                                    </p>
+                                </>
+                            ) : (
                                 <div
                                     style={{
-                                        height: "100%",
-                                        width: `${(minutes / maxAverageMinutes) * 100}%`,
-                                        background: "#2563eb",
-                                        borderRadius: "999px",
+                                        display: "flex",
+                                        gap: "10px",
+                                        marginTop: "10px",
+                                        alignItems: "center",
+                                        flexWrap: "wrap",
                                     }}
-                                />
-                            </div>
+                                >
+                                    <input
+                                        value={usernameInput}
+                                        onChange={(event) => setUsernameInput(event.target.value)}
+                                        placeholder="Användarnamn"
+                                        style={{
+                                            maxWidth: "320px",
+                                            padding: "12px",
+                                            borderRadius: "12px",
+                                            border: "1px solid rgba(148, 163, 184, 0.35)",
+                                            background: "rgba(2, 6, 23, 0.65)",
+                                            color: "white",
+                                            fontSize: "20px",
+                                            fontWeight: "bold",
+                                        }}
+                                    />
+
+                                    <button
+                                        onClick={saveUsername}
+                                        disabled={savingUsername || usernameInput.trim() === profile?.username}
+                                        style={{
+                                            padding: "12px 16px",
+                                            borderRadius: "12px",
+                                            border: `1px solid ${theme.border}`,
+                                            background: "rgba(255,255,255,0.14)",
+                                            color: theme.text,
+                                            fontWeight: "bold",
+                                            cursor: "pointer",
+                                            opacity:
+                                                savingUsername || usernameInput.trim() === profile?.username
+                                                    ? 0.55
+                                                    : 1,
+                                        }}
+                                    >
+                                        {savingUsername ? "Sparar..." : "Spara namn"}
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                    ))}
+                    </section>
+
+                    <section className="profile-stats-grid" style={gridStyle}>
+                        <StatCard theme={theme} title="Total studietid" value={formatHours(totalMinutes)} />
+                        <StatCard theme={theme} title="Genomförda pass" value={`${totalDonePasses}`} />
+                        <StatCard theme={theme} title="Aktiva studiedagar" value={`${activeDays}`} />
+                        <StatCard theme={theme} title="Snitt per aktiv dag" value={formatHours(averagePerActiveDay)} />
+                        <StatCard theme={theme} title="Fokusnivå" value={`${focusLevel}%`} />
+                        <StatCard
+                            theme={theme}
+                            title="Mest studerade ämne"
+                            value={mostStudiedSubject ? mostStudiedSubject[0] : "Inget ännu"}
+                            subValue={mostStudiedSubject ? formatHours(mostStudiedSubject[1]) : ""}
+                        />
+                    </section>
+
+                    <section style={chartCardStyle(theme)}>
+                        <h2 style={{ marginTop: 0 }}>Snitt per veckodag senaste månaden</h2>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                            {averageMinutesPerWeekday.map((minutes, index) => (
+                                <div key={weekDays[index]}>
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            marginBottom: "6px",
+                                            fontWeight: "bold",
+                                        }}
+                                    >
+                                        <span>{weekDays[index]}</span>
+                                        <span>{formatHours(minutes)}</span>
+                                    </div>
+
+                                    <div
+                                        style={{
+                                            height: "14px",
+                                            background: "rgba(148, 163, 184, 0.2)",
+                                            borderRadius: "999px",
+                                            overflow: "hidden",
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                height: "100%",
+                                                width: `${(minutes / maxAverageMinutes) * 100}%`,
+                                                background: "#2563eb",
+                                                borderRadius: "999px",
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
                 </div>
-            </section>
+
+                <aside
+                    style={{
+                        minWidth: 0,
+                        marginTop: "80px",
+                    }}
+                >
+                    <section style={profileCardStyle(theme)}>
+                        <h2 style={{ marginTop: 0 }}>⚙️ Standard för studiepass</h2>
+
+                        <p style={{ color: "#94a3b8", lineHeight: 1.6 }}>
+                            Dessa texter fylls automatiskt i när du skapar nya studiepass.
+                            Du kan fortfarande ändra dem för varje enskilt pass.
+                        </p>
+
+                        <div style={{ marginTop: "16px" }}>
+                            <label style={{ fontWeight: "bold" }}>Min pluggrutin</label>
+
+                            <textarea
+                                value={defaultStudyRoutine}
+                                onChange={(event) => setDefaultStudyRoutine(event.target.value)}
+                                rows={6}
+                                placeholder="Exempel: stäng av mobilen, ta fram material, börja med första checkrutan..."
+                                style={profileTextareaStyle}
+                            />
+                        </div>
+
+                        <div style={{ marginTop: "16px" }}>
+                            <label style={{ fontWeight: "bold" }}>Anteckning till mig själv</label>
+
+                            <textarea
+                                value={defaultSelfNote}
+                                onChange={(event) => setDefaultSelfNote(event.target.value)}
+                                rows={6}
+                                placeholder="Exempel: kom ihåg att börja lugnt, ta paus om det fastnar..."
+                                style={profileTextareaStyle}
+                            />
+                        </div>
+
+                        <button
+                            onClick={saveDefaultStudySettings}
+                            disabled={savingDefaults}
+                            style={{
+                                marginTop: "18px",
+                                width: "100%",
+                                padding: "12px 16px",
+                                borderRadius: "12px",
+                                border: `1px solid ${theme.border}`,
+                                background: "rgba(255,255,255,0.14)",
+                                color: theme.text,
+                                fontWeight: "bold",
+                                cursor: "pointer",
+                                opacity: savingDefaults ? 0.65 : 1,
+                            }}
+                        >
+                            {savingDefaults ? "Sparar..." : "Spara standardtexter"}
+                        </button>
+                    </section>
+                </aside>
+            </div>
         </main>
     );
 }
@@ -296,8 +517,8 @@ const profileCardStyle = (theme: typeof THEMES[ThemeKey]) => ({
 
 const gridStyle = {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: "16px",
+    gridTemplateColumns: "repeat(6, minmax(140px, 1fr))",
+    gap: "12px",
     marginTop: "20px",
 };
 
@@ -317,3 +538,17 @@ const chartCardStyle = (theme: typeof THEMES[ThemeKey]) => ({
     border: `1px solid ${theme.border}`,
     boxShadow: "0 14px 32px rgba(0,0,0,0.28)",
 });
+
+const profileTextareaStyle = {
+    width: "100%",
+    minHeight: "130px",
+    marginTop: "8px",
+    padding: "12px",
+    borderRadius: "12px",
+    border: "1px solid rgba(148, 163, 184, 0.35)",
+    background: "rgba(2, 6, 23, 0.65)",
+    color: "white",
+    resize: "vertical" as const,
+    boxSizing: "border-box" as const,
+    fontFamily: "Arial, sans-serif",
+};

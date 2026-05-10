@@ -19,6 +19,7 @@ type ChecklistItem = {
 type ResourceItem = {
     id: string;
     type: "link" | "file" | "image";
+    provider?: "youtube" | "quizlet" | "drive" | "link";
     title: string;
     url?: string;
     filePath?: string;
@@ -77,7 +78,7 @@ const DEFAULT_BLOCKS: Omit<StudyBlock, "id" | "checklist" | "note">[] = [
     {
         type: "quiz",
         title: "Testa dig själv",
-        subtitle: "Lägg in frågor eller kontrollpunkter du ska kunna svara på.",
+        subtitle: "Lägg in Quizlet, övningsprov eller annat du ska träna på.",
     },
     {
         type: "repeat",
@@ -181,6 +182,10 @@ export default function PassPage() {
     const [data, setData] = useState<PlanningData>(() => defaultPlanningData());
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [resourceTitle, setResourceTitle] = useState("");
+    const [resourceUrl, setResourceUrl] = useState("");
+    const [loadingLinkTitle, setLoadingLinkTitle] = useState(false);
+    const [collapsedBlockIds, setCollapsedBlockIds] = useState<string[]>([]);
 
     const canEditTime = isEditMode && !["active", "paused", "done"].includes(sessionStatus);
 
@@ -189,6 +194,7 @@ export default function PassPage() {
     const alarmAudioRef = useRef<HTMLAudioElement | null>(null);
     const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const lastSavedSecondRef = useRef<number | null>(null);
+    const isLeavingPageRef = useRef(false);
 
     const allChecklist = useMemo(
         () => data.blocks.flatMap((block) => block.checklist),
@@ -198,6 +204,15 @@ export default function PassPage() {
     const doneCount = allChecklist.filter((item) => item.done).length;
     const totalCount = allChecklist.length;
     const progress = totalCount ? Math.round((doneCount / totalCount) * 100) : 0;
+    const nextTask = data.blocks
+        .flatMap((block) =>
+            block.checklist.map((item) => ({
+                ...item,
+                blockId: block.id,
+                blockTitle: block.title,
+            }))
+        )
+        .find((item) => !item.done);
 
 
     useEffect(() => {
@@ -227,8 +242,11 @@ export default function PassPage() {
 
             if (sessionStatus.status !== "active") {
                 setIsRunning(false);
-                alert("Detta studiepass pausades eftersom ett annat pass startades.");
-                router.push("/kalender");
+
+                if (!isLeavingPageRef.current) {
+                    alert("Detta studiepass pausades eftersom ett annat pass startades.");
+                    router.push("/kalender");
+                }
             }
         }, 2000);
 
@@ -493,6 +511,8 @@ export default function PassPage() {
 
             event.preventDefault();
 
+            isLeavingPageRef.current = true;
+
             await pauseSession(false);
 
             router.push(url.pathname + url.search + url.hash);
@@ -615,6 +635,24 @@ export default function PassPage() {
         });
     }
 
+    function completeNextTask() {
+        if (!nextTask) return;
+
+        scheduleSave({
+            ...data,
+            blocks: data.blocks.map((block) =>
+                block.id === nextTask.blockId
+                    ? {
+                        ...block,
+                        checklist: block.checklist.map((item) =>
+                            item.id === nextTask.id ? { ...item, done: true } : item
+                        ),
+                    }
+                    : block
+            ),
+        });
+    }
+
     function updateChecklistText(blockId: string, itemId: string, text: string) {
         scheduleSave({
             ...data,
@@ -697,6 +735,14 @@ export default function PassPage() {
         });
     }
 
+    function toggleBlockCollapsed(blockId: string) {
+        setCollapsedBlockIds((current) =>
+            current.includes(blockId)
+                ? current.filter((id) => id !== blockId)
+                : [...current, blockId]
+        );
+    }
+
     function updateBlockNote(blockId: string, note: string) {
         scheduleSave({
             ...data,
@@ -706,17 +752,120 @@ export default function PassPage() {
         });
     }
 
-    function addLink() {
-        const title = prompt("Titel på resursen?");
-        if (!title) return;
+    function getLinkProvider(url: string): ResourceItem["provider"] {
+        try {
+            const hostname = new URL(url).hostname.replace("www.", "");
 
-        const url = prompt("Länk/URL?");
-        if (!url) return;
+            if (hostname.includes("youtube.com") || hostname.includes("youtu.be")) {
+                return "youtube";
+            }
+
+            if (hostname.includes("quizlet.com")) {
+                return "quizlet";
+            }
+
+            if (hostname.includes("drive.google.com")) {
+                return "drive";
+            }
+
+            return "link";
+        } catch {
+            return "link";
+        }
+    }
+
+    function getResourceIcon(resource: ResourceItem) {
+        if (resource.type === "image") return "🖼️";
+        if (resource.type === "file") return "📄";
+
+        if (resource.provider === "youtube") return "▶️";
+        if (resource.provider === "quizlet") return "🧠";
+        if (resource.provider === "drive") return "📁";
+
+        return "🔗";
+    }
+
+    async function fetchLinkTitle(urlValue: string) {
+        const url = urlValue.trim();
+
+        if (!url) return null;
+
+        setLoadingLinkTitle(true);
+
+        try {
+            const response = await fetch("/api/link-preview", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ url }),
+            });
+
+            const result = await response.json();
+
+            if (result.url) {
+                setResourceUrl(result.url);
+            }
+
+            if (result.title && !resourceTitle.trim()) {
+                setResourceTitle(result.title);
+            }
+
+            return {
+                title: result.title || "Länk",
+                url: result.url || url,
+                provider: getLinkProvider(result.url || url),
+            };
+        } catch {
+            return {
+                title: "Länk",
+                url,
+                provider: getLinkProvider(url),
+            };
+        } finally {
+            setLoadingLinkTitle(false);
+        }
+    }
+
+    async function addLink() {
+        const rawUrl = resourceUrl.trim();
+
+        if (!rawUrl) return;
+
+        let formattedUrl =
+            rawUrl.startsWith("http://") || rawUrl.startsWith("https://")
+                ? rawUrl
+                : `https://${rawUrl}`;
+
+        let title = resourceTitle.trim();
+        let provider = getLinkProvider(formattedUrl);
+
+        if (!title) {
+            const preview = await fetchLinkTitle(formattedUrl);
+
+            if (preview) {
+                formattedUrl = preview.url;
+                title = preview.title;
+                provider = preview.provider;
+            }
+        }
 
         scheduleSave({
             ...data,
-            resources: [...data.resources, { id: uid(), type: "link", title, url }],
+            resources: [
+                ...data.resources,
+                {
+                    id: uid(),
+                    type: "link",
+                    provider,
+                    title: title || "Länk",
+                    url: formattedUrl,
+                },
+            ],
         });
+
+        setResourceTitle("");
+        setResourceUrl("");
     }
 
     async function uploadResource(event: ChangeEvent<HTMLInputElement>) {
@@ -759,6 +908,16 @@ export default function PassPage() {
     }
 
     function removeResource(resourceId: string) {
+        const resource = data.resources.find((resource) => resource.id === resourceId);
+
+        if (!resource) return;
+
+        const confirmed = window.confirm(
+            `Är du säker på att du vill ta bort "${resource.title}"?`
+        );
+
+        if (!confirmed) return;
+
         scheduleSave({
             ...data,
             resources: data.resources.filter((resource) => resource.id !== resourceId),
@@ -927,11 +1086,7 @@ export default function PassPage() {
             <div className="pass-page-shell" style={{ minWidth: isStudyMode ? "1280px" : "1180px" }}>
                 <NavBar />
 
-                <ThemePicker
-                    themeKey={themeKey}
-                    setThemeKey={setThemeKey}
-                    hidden={isStudyMode && isRunning}
-                />
+
 
                 {isStudyMode && (
                     <div
@@ -944,7 +1099,7 @@ export default function PassPage() {
                             padding: "18px",
                             borderRadius: "18px",
                             boxShadow: "0 10px 25px rgba(0,0,0,0.4)",
-                            width: "190px",
+                            width: "230px",
                             textAlign: "center",
                             zIndex: 10,
                             border: "1px solid rgba(148, 163, 184, 0.18)",
@@ -982,6 +1137,16 @@ export default function PassPage() {
                         >
                             Avsluta tidigare
                         </button>
+                        <div
+                            style={{
+                                marginTop: "12px",
+                            }}
+                        >
+                            <ThemePicker
+                                themeKey={themeKey}
+                                setThemeKey={setThemeKey}
+                            />
+                        </div>
                     </div>
                 )}
 
@@ -1153,6 +1318,7 @@ export default function PassPage() {
                             </div>
                         </div>
 
+
                         <div style={{ ...cardStyle, padding: "18px" }}>
                             <div
                                 style={{
@@ -1169,251 +1335,178 @@ export default function PassPage() {
                             </div>
 
                             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                                {data.blocks.map((block, index) => (
-                                    <div
-                                        key={block.id}
-                                        style={{
-                                            border: "1px solid rgba(148,163,184,.16)",
-                                            borderRadius: "14px",
-                                            padding: "16px",
-                                            background: "rgba(30,41,59,.35)",
-                                        }}
-                                    >
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                            <h3 style={{ margin: 0, fontSize: "17px", color: "#f8fafc" }}>
-                                                Steg {index + 1} – {block.title.replace(/^Steg \d+ – /, "")}
-                                            </h3>
+                                {data.blocks.map((block, index) => {
+                                    const isCollapsed = collapsedBlockIds.includes(block.id);
+                                    const blockDoneCount = block.checklist.filter((item) => item.done).length;
+                                    const blockTotalCount = block.checklist.length;
 
-                                            {!readOnly && (
-                                                <button
-                                                    onClick={() => removeBlock(block.id)}
-                                                    style={smallButton}
-                                                >
-                                                    Ta bort
-                                                </button>
-                                            )}
-                                        </div>
-                                        <p style={{ margin: "8px 0 14px", color: "#94a3b8" }}>{block.subtitle}</p>
-
+                                    return (
                                         <div
-                                            className="pass-block-inner-grid"
+                                            key={block.id}
                                             style={{
-                                                display: "grid",
-                                                gridTemplateColumns: "1fr 290px",
-                                                gap: "18px",
-                                                alignItems: "start",
+                                                border: "1px solid rgba(148,163,184,.16)",
+                                                borderRadius: "14px",
+                                                padding: "16px",
+                                                background: "rgba(30,41,59,.35)",
                                             }}
                                         >
-                                            <div style={{ minWidth: 0 }}>
-                                                {block.checklist.length === 0 && (
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    justifyContent: "space-between",
+                                                    alignItems: "center",
+                                                    gap: "12px",
+                                                }}
+                                            >
+                                                <button
+                                                    onClick={() => toggleBlockCollapsed(block.id)}
+                                                    type="button"
+                                                    style={{
+                                                        flex: 1,
+                                                        minHeight: "auto",
+                                                        padding: 0,
+                                                        border: "none",
+                                                        background: "transparent",
+                                                        color: "inherit",
+                                                        textAlign: "left",
+                                                        cursor: "pointer",
+                                                    }}
+                                                >
+                                                    <h3 style={{ margin: 0, fontSize: "17px", color: "#f8fafc" }}>
+                                                        Steg {index + 1} – {block.title.replace(/^Steg \d+ – /, "")}
+                                                    </h3>
+
                                                     <div
                                                         style={{
+                                                            marginTop: "5px",
                                                             color: "#94a3b8",
-                                                            border: "1px dashed rgba(148,163,184,.25)",
-                                                            borderRadius: "12px",
-                                                            padding: "12px",
-                                                            marginBottom: "12px",
+                                                            fontSize: "13px",
                                                         }}
                                                     >
-                                                        Inga checkrutor ännu.
+                                                        {blockTotalCount === 0
+                                                            ? "Inga checkrutor"
+                                                            : `${blockDoneCount}/${blockTotalCount} klart`}
                                                     </div>
-                                                )}
+                                                </button>
 
-                                                {block.checklist.map((item) => (
-                                                    <label
-                                                        key={item.id}
+                                                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+
+                                                    <button
+                                                        onClick={() => toggleBlockCollapsed(block.id)}
                                                         style={{
-                                                            display: "grid",
-                                                            gridTemplateColumns: readOnly ? "24px 1fr" : "24px 1fr 34px",
-                                                            alignItems: "center",
-                                                            gap: "10px",
-                                                            marginBottom: "12px",
+                                                            ...smallButton,
+                                                            width: "42px",
+                                                            padding: "8px 0",
+                                                            fontSize: "18px",
+                                                        }}
+                                                        type="button"
+                                                        title={isCollapsed ? "Visa steg" : "Dölj steg"}
+                                                    >
+                                                        {isCollapsed ? "+" : "−"}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {!isCollapsed && (
+                                                <>
+                                                    <p style={{ margin: "8px 0 14px", color: "#94a3b8" }}>
+                                                        {block.subtitle}
+                                                    </p>
+
+                                                    <div
+                                                        className="pass-block-inner-grid"
+                                                        style={{
+                                                            display: "block",
                                                         }}
                                                     >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={item.done}
-                                                            disabled={isEditMode}
-                                                            onChange={() => {
-                                                                if (!isEditMode) {
-                                                                    toggleChecklist(block.id, item.id);
-                                                                }
-                                                            }}
-                                                        />
+                                                        <div style={{ minWidth: 0 }}>
 
-                                                        {isViewMode ? (
-                                                            <span
-                                                                style={{
-                                                                    textDecoration: item.done ? "line-through" : "none",
-                                                                    color: item.done ? "#94a3b8" : "#e2e8f0",
-                                                                    wordBreak: "break-word",
-                                                                }}
-                                                            >
-                                                                {item.text || "Namnlös checkruta"}
-                                                            </span>
-                                                        ) : (
-                                                            <input
-                                                                value={item.text}
-                                                                onChange={(event) =>
-                                                                    updateChecklistText(block.id, item.id, event.target.value)
-                                                                }
-                                                                placeholder="Skriv checkruta..."
-                                                                style={{
-                                                                    ...inputStyle,
-                                                                    padding: "8px 10px",
-                                                                    textDecoration: item.done ? "line-through" : "none",
-                                                                    color: item.done ? "#94a3b8" : "#e2e8f0",
-                                                                }}
-                                                            />
-                                                        )}
-                                                    </label>
-                                                ))}
+                                                            {block.checklist.map((item) => (
+                                                                <label
+                                                                    key={item.id}
+                                                                    style={{
+                                                                        display: "grid",
+                                                                        gridTemplateColumns: readOnly ? "24px 1fr" : "24px 1fr 34px",
+                                                                        alignItems: "center",
+                                                                        gap: "10px",
+                                                                        marginBottom: "12px",
+                                                                    }}
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={item.done}
+                                                                        disabled={isEditMode}
+                                                                        onChange={() => {
+                                                                            if (!isEditMode) {
+                                                                                toggleChecklist(block.id, item.id);
+                                                                            }
+                                                                        }}
+                                                                    />
 
-                                                {!readOnly && (
-                                                    <button
-                                                        onClick={() => addChecklistItem(block.id)}
-                                                        style={smallButton}
-                                                        type="button"
-                                                    >
-                                                        + Lägg till checkruta
-                                                    </button>
-                                                )}
-                                            </div>
+                                                                    {isViewMode ? (
+                                                                        <span
+                                                                            style={{
+                                                                                textDecoration: item.done ? "line-through" : "none",
+                                                                                color: item.done ? "#94a3b8" : "#e2e8f0",
+                                                                                wordBreak: "break-word",
+                                                                            }}
+                                                                        >
+                                                                            {item.text || "Namnlös checkruta"}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <input
+                                                                            value={item.text}
+                                                                            onChange={(event) =>
+                                                                                updateChecklistText(block.id, item.id, event.target.value)
+                                                                            }
+                                                                            placeholder="Skriv checkruta..."
+                                                                            style={{
+                                                                                ...inputStyle,
+                                                                                padding: "8px 10px",
+                                                                                textDecoration: item.done ? "line-through" : "none",
+                                                                                color: item.done ? "#94a3b8" : "#e2e8f0",
+                                                                            }}
+                                                                        />
+                                                                    )}
+                                                                    {!readOnly && (
+                                                                        <button
+                                                                            onClick={() => removeChecklistItem(block.id, item.id)}
+                                                                            style={{
+                                                                                ...smallButton,
+                                                                                width: "34px",
+                                                                                height: "34px",
+                                                                                minHeight: "34px",
+                                                                                padding: 0,
+                                                                                borderRadius: "10px",
+                                                                                color: "#fecaca",
+                                                                                background: "rgba(239, 68, 68, 0.12)",
+                                                                                border: "1px solid rgba(248, 113, 113, 0.35)",
+                                                                            }}
+                                                                            type="button"
+                                                                            title="Ta bort checkruta"
+                                                                        >
+                                                                            ×
+                                                                        </button>
+                                                                    )}
+                                                                </label>
+                                                            ))}
 
-                                            <div style={{ minWidth: 0 }}>
-                                                <div style={{ color: "#94a3b8", fontSize: "13px", marginBottom: "8px" }}>
-                                                    {block.type === "quiz"
-                                                        ? "Vad är det viktigaste jag ska kunna efter passet?"
-                                                        : "Anteckningar"}
-                                                </div>
-
-                                                <textarea
-                                                    disabled={readOnly}
-                                                    value={block.note}
-                                                    onChange={(event) => updateBlockNote(block.id, event.target.value)}
-                                                    placeholder={
-                                                        block.type === "quiz"
-                                                            ? "Skriv vad eleven ska kunna testa sig själv på..."
-                                                            : "Egna anteckningar för detta steg..."
-                                                    }
-                                                    rows={6}
-                                                    style={{ ...inputStyle, resize: "vertical" }}
-                                                />
-                                            </div>
+                                                            {!readOnly && (
+                                                                <button
+                                                                    onClick={() => addChecklistItem(block.id)}
+                                                                    style={smallButton}
+                                                                    type="button"
+                                                                >
+                                                                    + Lägg till checkruta
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
-                                    </div>
-                                ))}
-                                {!readOnly && getMissingBlocks().length > 0 && (
-                                    <div
-                                        style={{
-                                            marginTop: "16px",
-                                            paddingTop: "16px",
-                                            borderTop: "1px solid rgba(148,163,184,.16)",
-                                        }}
-                                    >
-                                        <div style={{ color: "#94a3b8", marginBottom: "10px" }}>
-                                            Lägg till borttaget steg
-                                        </div>
-
-                                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                                            {getMissingBlocks().map((block) => (
-                                                <button
-                                                    key={block.type}
-                                                    onClick={() => addBlock(block.type)}
-                                                    style={smallButton}
-                                                    type="button"
-                                                >
-                                                    + {block.title}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div style={{ ...cardStyle, padding: "18px" }}>
-                            <div
-                                style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    alignItems: "center",
-                                    marginBottom: "14px",
-                                }}
-                            >
-                                <h2 style={{ margin: 0, fontSize: "20px" }}>Resurser</h2>
-
-                                {!readOnly && (
-                                    <div className="pass-resource-actions" style={{ display: "flex", gap: "8px" }}>
-                                        <button onClick={addLink} style={smallButton} type="button">
-                                            + Lägg till länk
-                                        </button>
-
-                                        <label style={{ ...smallButton, display: "inline-block" }}>
-                                            {uploading ? "Laddar upp..." : "+ Ladda upp fil/bild"}
-                                            <input
-                                                hidden
-                                                type="file"
-                                                accept="image/*,.pdf,.doc,.docx,.ppt,.pptx"
-                                                onChange={uploadResource}
-                                            />
-                                        </label>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div
-                                className="pass-resource-grid"
-                                style={{
-                                    display: "grid",
-                                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                                    gap: "12px",
-                                }}
-                            >
-                                {data.resources.map((resource) => (
-                                    <div
-                                        key={resource.id}
-                                        style={{
-                                            border: "1px solid rgba(148,163,184,.16)",
-                                            borderRadius: "12px",
-                                            padding: "12px",
-                                            background: "rgba(30,41,59,.35)",
-                                            minWidth: 0,
-                                        }}
-                                    >
-                                        <a
-                                            href={resource.url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            style={{
-                                                color: "#f8fafc",
-                                                fontWeight: 700,
-                                                textDecoration: "none",
-                                                overflowWrap: "anywhere",
-                                            }}
-                                        >
-                                            {resource.type === "image" ? "🖼️" : resource.type === "file" ? "📄" : "🔗"} {resource.title}
-                                        </a>
-
-                                        <div style={{ color: "#94a3b8", fontSize: "13px", marginTop: "6px" }}>
-                                            {resource.mimeType || "Länk"} {formatBytes(resource.sizeBytes)}
-                                        </div>
-
-                                        {!readOnly && (
-                                            <button
-                                                onClick={() => removeResource(resource.id)}
-                                                style={{ ...smallButton, marginTop: "10px" }}
-                                                type="button"
-                                            >
-                                                Ta bort
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
-
-                                {data.resources.length === 0 && (
-                                    <div style={{ color: "#94a3b8" }}>Inga resurser tillagda ännu.</div>
-                                )}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
@@ -1447,22 +1540,252 @@ export default function PassPage() {
                         <div style={{ ...cardStyle, padding: "18px" }}>
                             <h3 style={{ marginTop: 0 }}>Checklista snabbvy</h3>
 
-                            {allChecklist.length === 0 && (
+                            {allChecklist.length === 0 ? (
                                 <p style={{ color: "#94a3b8" }}>Inga checkrutor inlagda ännu.</p>
+                            ) : (
+                                <>
+                                    {isStudyMode && nextTask && (
+                                        <div
+                                            style={{
+                                                padding: "14px",
+                                                borderRadius: "14px",
+                                                background: "rgba(37, 99, 235, 0.16)",
+                                                border: "1px solid rgba(96, 165, 250, 0.35)",
+                                                marginBottom: "14px",
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    color: "#93c5fd",
+                                                    fontSize: "13px",
+                                                    fontWeight: "bold",
+                                                    marginBottom: "6px",
+                                                }}
+                                            >
+                                                Nästa
+                                            </div>
+
+                                            <div
+                                                style={{
+                                                    color: "#f8fafc",
+                                                    fontWeight: "bold",
+                                                    overflowWrap: "anywhere",
+                                                    lineHeight: 1.45,
+                                                }}
+                                            >
+                                                ⬜ {nextTask.text || "Namnlös checkruta"}
+                                            </div>
+
+                                            <div
+                                                style={{
+                                                    color: "#94a3b8",
+                                                    fontSize: "12px",
+                                                    marginTop: "6px",
+                                                }}
+                                            >
+                                                {nextTask.blockTitle.replace(/^Steg \d+ – /, "")}
+                                            </div>
+
+                                            {!readOnly && (
+                                                <button
+                                                    onClick={completeNextTask}
+                                                    style={{
+                                                        ...smallButton,
+                                                        width: "100%",
+                                                        marginTop: "12px",
+                                                        background: "#16a34a",
+                                                        border: "none",
+                                                        color: "white",
+                                                    }}
+                                                    type="button"
+                                                >
+                                                    Markera klar
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {isStudyMode && !nextTask && (
+                                        <div
+                                            style={{
+                                                padding: "14px",
+                                                borderRadius: "14px",
+                                                background: "rgba(22, 163, 74, 0.14)",
+                                                border: "1px solid rgba(34, 197, 94, 0.32)",
+                                                color: "#bbf7d0",
+                                                fontWeight: "bold",
+                                                marginBottom: "14px",
+                                            }}
+                                        >
+                                            Alla checkrutor är klara 🎉
+                                        </div>
+                                    )}
+
+                                    <div style={{ display: "grid", gap: "9px" }}>
+                                        {allChecklist.slice(0, 8).map((item) => (
+                                            <div
+                                                key={item.id}
+                                                style={{
+                                                    color: item.done ? "#86efac" : "#cbd5e1",
+                                                    overflowWrap: "anywhere",
+                                                    fontSize: "14px",
+                                                    lineHeight: 1.4,
+                                                }}
+                                            >
+                                                {item.done ? "✅" : "⬜"} {item.text || "Namnlös checkruta"}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        <div style={{ ...cardStyle, padding: "18px" }}>
+                            <h3 style={{ marginTop: 0 }}>Resurser</h3>
+
+                            {!readOnly && (
+                                <div style={{ display: "grid", gap: "14px", marginBottom: "14px" }}>
+                                    <div
+                                        style={{
+                                            display: "grid",
+                                            gap: "10px",
+                                            padding: "12px",
+                                            borderRadius: "14px",
+                                            background: "rgba(15, 23, 42, 0.45)",
+                                            border: "1px solid rgba(148,163,184,.16)",
+                                        }}
+                                    >
+                                        <strong>Lägg till länk</strong>
+
+                                        {resourceUrl.trim() && (
+                                            <input
+                                                value={resourceTitle}
+                                                onChange={(event) => setResourceTitle(event.target.value)}
+                                                placeholder={loadingLinkTitle ? "Hämtar titel..." : "Titel fylls i automatiskt"}
+                                                style={inputStyle}
+                                            />
+                                        )}
+
+                                        <input
+                                            value={resourceUrl}
+                                            onChange={(event) => {
+                                                const value = event.target.value;
+                                                setResourceUrl(value);
+
+                                                if (value.includes("http") || value.includes(".")) {
+                                                    fetchLinkTitle(value);
+                                                }
+                                            }}
+                                            placeholder="Klistra in länk här..."
+                                            style={inputStyle}
+                                        />
+
+                                        {resourceUrl.trim() && (
+                                            <button
+                                                onClick={addLink}
+                                                disabled={loadingLinkTitle}
+                                                style={{
+                                                    ...smallButton,
+                                                    opacity: loadingLinkTitle ? 0.65 : 1,
+                                                }}
+                                                type="button"
+                                            >
+                                                {loadingLinkTitle ? "Hämtar titel..." : "+ Lägg till länk"}
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div
+                                        style={{
+                                            display: "grid",
+                                            gap: "10px",
+                                            padding: "12px",
+                                            borderRadius: "14px",
+                                            background: "rgba(15, 23, 42, 0.45)",
+                                            border: "1px solid rgba(148,163,184,.16)",
+                                        }}
+                                    >
+                                        <strong>Ladda upp fil/bild</strong>
+
+                                        <label
+                                            style={{
+                                                ...smallButton,
+                                                display: "block",
+                                                textAlign: "center",
+                                            }}
+                                        >
+                                            {uploading ? "Laddar upp..." : "Välj fil eller bild"}
+                                            <input
+                                                hidden
+                                                type="file"
+                                                accept="image/*,.pdf,.doc,.docx,.ppt,.pptx"
+                                                onChange={uploadResource}
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
                             )}
 
-                            {allChecklist.slice(0, 8).map((item) => (
-                                <div
-                                    key={item.id}
-                                    style={{
-                                        marginBottom: "10px",
-                                        color: item.done ? "#86efac" : "#cbd5e1",
-                                        overflowWrap: "anywhere",
-                                    }}
-                                >
-                                    {item.done ? "✅" : "⬜"} {item.text || "Namnlös checkruta"}
+                            {data.resources.length === 0 ? (
+                                <p style={{ color: "#94a3b8", margin: 0 }}>
+                                    Inga resurser tillagda ännu.
+                                </p>
+                            ) : (
+                                <div style={{ display: "grid", gap: "10px" }}>
+                                    {data.resources.map((resource) => (
+                                        <div
+                                            key={resource.id}
+                                            style={{
+                                                border: "1px solid rgba(148,163,184,.16)",
+                                                borderRadius: "12px",
+                                                padding: "12px",
+                                                background: "rgba(30,41,59,.35)",
+                                                minWidth: 0,
+                                            }}
+                                        >
+                                            <a
+                                                href={resource.url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                style={{
+                                                    color: "#f8fafc",
+                                                    fontWeight: 700,
+                                                    textDecoration: "none",
+                                                    overflowWrap: "anywhere",
+                                                    lineHeight: 1.4,
+                                                    display: "block",
+                                                }}
+                                            >
+                                                {getResourceIcon(resource)} {resource.title}
+                                            </a>
+
+                                            <div
+                                                style={{
+                                                    color: "#94a3b8",
+                                                    fontSize: "13px",
+                                                    marginTop: "6px",
+                                                }}
+                                            >
+                                                {resource.mimeType || "Länk"} {formatBytes(resource.sizeBytes)}
+                                            </div>
+
+                                            {!readOnly && (
+                                                <button
+                                                    onClick={() => removeResource(resource.id)}
+                                                    style={{
+                                                        ...smallButton,
+                                                        marginTop: "10px",
+                                                        width: "100%",
+                                                    }}
+                                                    type="button"
+                                                >
+                                                    Ta bort
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
+                            )}
                         </div>
 
                         <div style={{ ...cardStyle, padding: "18px" }}>
@@ -1499,94 +1822,6 @@ export default function PassPage() {
                                     />
                                 </div>
                             </div>
-                        </div>
-
-                        <div style={{ ...cardStyle, padding: "18px" }}>
-                            <div
-                                style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    alignItems: "center",
-                                    gap: "10px",
-                                }}
-                            >
-                                <h3 style={{ margin: 0 }}>Testa dig själv</h3>
-                                {!readOnly && (
-                                    <button onClick={addQuestion} style={smallButton} type="button">
-                                        + Fråga
-                                    </button>
-                                )}
-                            </div>
-
-                            {data.questions.length === 0 && (
-                                <p style={{ color: "#94a3b8" }}>Inga frågor inlagda ännu.</p>
-                            )}
-
-                            {data.questions.map((question) => (
-                                <div
-                                    key={question.id}
-                                    style={{
-                                        borderTop: "1px solid rgba(148,163,184,.14)",
-                                        paddingTop: "12px",
-                                        marginTop: "12px",
-                                    }}
-                                >
-                                    {readOnly ? (
-                                        <strong style={{ overflowWrap: "anywhere" }}>
-                                            {question.question || "Namnlös fråga"}
-                                        </strong>
-                                    ) : (
-                                        <input
-                                            value={question.question}
-                                            onChange={(event) =>
-                                                updateQuestion(question.id, { question: event.target.value })
-                                            }
-                                            placeholder="Skriv fråga..."
-                                            style={inputStyle}
-                                        />
-                                    )}
-
-                                    {!readOnly && (
-                                        <textarea
-                                            value={question.answer}
-                                            onChange={(event) =>
-                                                updateQuestion(question.id, { answer: event.target.value })
-                                            }
-                                            placeholder="Skriv facit/svar..."
-                                            rows={3}
-                                            style={{ ...inputStyle, marginTop: "10px", resize: "vertical" }}
-                                        />
-                                    )}
-
-                                    {readOnly && question.answer && (
-                                        <button
-                                            onClick={() =>
-                                                updateQuestion(question.id, {
-                                                    showAnswer: !question.showAnswer,
-                                                })
-                                            }
-                                            style={{ ...smallButton, width: "100%", marginTop: "8px" }}
-                                            type="button"
-                                        >
-                                            {question.showAnswer ? "Dölj svar" : "Visa svar"}
-                                        </button>
-                                    )}
-
-                                    {readOnly && question.showAnswer && (
-                                        <p style={{ color: "#cbd5e1", whiteSpace: "pre-wrap" }}>{question.answer}</p>
-                                    )}
-
-                                    {!readOnly && (
-                                        <button
-                                            onClick={() => removeQuestion(question.id)}
-                                            style={{ ...smallButton, marginTop: "8px" }}
-                                            type="button"
-                                        >
-                                            Ta bort fråga
-                                        </button>
-                                    )}
-                                </div>
-                            ))}
                         </div>
                     </aside>
                 </section>

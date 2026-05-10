@@ -9,6 +9,7 @@ import ThemePicker from "@/components/ThemePicker";
 type Profile = {
     id: string;
     username: string | null;
+    username_locked?: boolean | null;
     is_admin?: boolean;
     created_at?: string;
     show_on_leaderboard?: boolean;
@@ -52,6 +53,19 @@ type AdminClassStudent = {
     created_at: string;
 };
 
+type AdminStudyTemplate = {
+    id: string;
+    admin_id: string;
+    title: string;
+    subject: string;
+    area: string;
+    duration: number;
+    planning: string | null;
+    planning_data: any;
+    created_at: string;
+    updated_at: string;
+};
+
 const weekDays = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
 
 function formatHours(minutes: number) {
@@ -88,10 +102,31 @@ export default function AdminPage() {
     const [classStudents, setClassStudents] = useState<AdminClassStudent[]>([]);
     const [newClassName, setNewClassName] = useState("");
     const [openClassIds, setOpenClassIds] = useState<string[]>([]);
+    const [adminUsernameInput, setAdminUsernameInput] = useState("");
+    const [savingAdminUsername, setSavingAdminUsername] = useState(false);
+
+    const [studyTemplates, setStudyTemplates] = useState<AdminStudyTemplate[]>([]);
+    const [showTemplateEditor, setShowTemplateEditor] = useState(false);
+    const [selectedTemplate, setSelectedTemplate] = useState<AdminStudyTemplate | null>(null);
+
+    const [templateTitle, setTemplateTitle] = useState("");
+    const [templateSubject, setTemplateSubject] = useState("");
+    const [templateArea, setTemplateArea] = useState("");
+    const [templateDuration, setTemplateDuration] = useState(30);
+    const [templatePlanning, setTemplatePlanning] = useState("");
+    const [templateToSend, setTemplateToSend] = useState<AdminStudyTemplate | null>(null);
+    const [selectedStudentIdsToSend, setSelectedStudentIdsToSend] = useState<string[]>([]);
+    const [openSendClassIds, setOpenSendClassIds] = useState<string[]>([]);
+    const [sendOtherUsersOpen, setSendOtherUsersOpen] = useState(false);
 
     useEffect(() => {
         loadAdminData();
     }, []);
+
+    useEffect(() => {
+        const selectedProfile = profiles.find((profile) => profile.id === selectedUserId);
+        setAdminUsernameInput(selectedProfile?.username || "");
+    }, [selectedUserId, profiles]);
 
     async function loadAdminData() {
         const { data: userData } = await supabase.auth.getUser();
@@ -119,7 +154,7 @@ export default function AdminPage() {
 
         const { data: profileData } = await supabase
             .from("profiles")
-            .select("id, username, is_admin, created_at, show_on_leaderboard, pepp_blocked_until, pepp_block_reason")
+            .select("id, username, username_locked, is_admin, created_at, show_on_leaderboard, pepp_blocked_until, pepp_block_reason")
             .order("username", { ascending: true });
 
         const { data: sessionData, error: sessionError } = await supabase
@@ -150,6 +185,16 @@ export default function AdminPage() {
             .from("admin_class_students")
             .select("*");
 
+        const { data: templateData, error: templateError } = await supabase
+            .from("admin_study_templates")
+            .select("*")
+            .eq("admin_id", currentAdminId)
+            .order("created_at", { ascending: false });
+
+        if (templateError) {
+            alert(templateError.message);
+        }
+
         if (classStudentError) {
             alert(classStudentError.message);
         }
@@ -168,6 +213,7 @@ export default function AdminPage() {
         setPosts(postData || []);
         setAdminClasses(classData || []);
         setClassStudents(classStudentData || []);
+        setStudyTemplates(templateData || []);
         setSelectedUserId(profileData?.[0]?.id || null);
         setLoading(false);
     }
@@ -222,6 +268,86 @@ export default function AdminPage() {
         }
 
         loadAdminData();
+    }
+
+    async function saveAdminUsername() {
+        if (!selectedProfile) return;
+
+        const nextUsername = adminUsernameInput.trim();
+
+        if (!nextUsername) return;
+
+        if (nextUsername.length < 3) {
+            alert("Användarnamnet måste vara minst 3 tecken.");
+            return;
+        }
+
+        const existingUser = profiles.find(
+            (profile) =>
+                profile.id !== selectedProfile.id &&
+                (profile.username || "").toLowerCase() === nextUsername.toLowerCase()
+        );
+
+        if (existingUser) {
+            alert("Det användarnamnet är redan upptaget.");
+            return;
+        }
+
+        setSavingAdminUsername(true);
+
+        const { error } = await supabase
+            .from("profiles")
+            .update({
+                username: nextUsername,
+            })
+            .eq("id", selectedProfile.id);
+
+        setSavingAdminUsername(false);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setProfiles((current) =>
+            current.map((profile) =>
+                profile.id === selectedProfile.id
+                    ? { ...profile, username: nextUsername }
+                    : profile
+            )
+        );
+
+        alert("Användarnamn uppdaterat.");
+    }
+
+    async function toggleUsernameLock(userId: string, nextValue: boolean) {
+        const confirmed = window.confirm(
+            nextValue
+                ? "Låsa användarens möjlighet att byta användarnamn?"
+                : "Låsa upp användarens möjlighet att byta användarnamn?"
+        );
+
+        if (!confirmed) return;
+
+        const { error } = await supabase
+            .from("profiles")
+            .update({
+                username_locked: nextValue,
+            })
+            .eq("id", userId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setProfiles((current) =>
+            current.map((profile) =>
+                profile.id === userId
+                    ? { ...profile, username_locked: nextValue }
+                    : profile
+            )
+        );
     }
 
     function isStudentInAnyClass(studentId: string) {
@@ -305,6 +431,248 @@ export default function AdminPage() {
         }
 
         loadAdminData();
+    }
+
+    function openNewTemplateEditor() {
+        setSelectedTemplate(null);
+        setTemplateTitle("");
+        setTemplateSubject("");
+        setTemplateArea("");
+        setTemplateDuration(30);
+        setTemplatePlanning("");
+        setShowTemplateEditor(true);
+    }
+
+    function openExistingTemplateEditor(template: AdminStudyTemplate) {
+        setSelectedTemplate(template);
+        setTemplateTitle(template.title);
+        setTemplateSubject(template.subject);
+        setTemplateArea(template.area || "");
+        setTemplateDuration(template.duration);
+        setTemplatePlanning(template.planning || "");
+        setShowTemplateEditor(true);
+    }
+
+    function closeTemplateEditor() {
+        setSelectedTemplate(null);
+        setTemplateTitle("");
+        setTemplateSubject("");
+        setTemplateArea("");
+        setTemplateDuration(30);
+        setTemplatePlanning("");
+        setShowTemplateEditor(false);
+    }
+
+    async function saveStudyTemplate() {
+        const title = templateTitle.trim();
+        const subject = templateSubject.trim();
+        const area = templateArea.trim();
+        const planning = templatePlanning.trim();
+
+        if (!title || !subject) {
+            alert("Titel och ämne måste fyllas i.");
+            return;
+        }
+
+        const { data: userData } = await supabase.auth.getUser();
+        const user = userData.user;
+
+        if (!user) {
+            window.location.href = "/login";
+            return;
+        }
+
+        const templatePayload = {
+            admin_id: user.id,
+            title,
+            subject,
+            area,
+            duration: templateDuration,
+            planning: planning || null,
+            planning_data: {
+                goal: planning,
+                priority: "Medel",
+                blocks: [
+                    {
+                        id: crypto.randomUUID(),
+                        type: "understand",
+                        title: "Förstå",
+                        subtitle: "Lägg in det eleven ska läsa, titta på eller förstå.",
+                        checklist: [],
+                        note: "",
+                    },
+                    {
+                        id: crypto.randomUUID(),
+                        type: "practice",
+                        title: "Träna",
+                        subtitle: "Lägg in övningar, uppgifter eller saker eleven ska göra.",
+                        checklist: [],
+                        note: "",
+                    },
+                    {
+                        id: crypto.randomUUID(),
+                        type: "quiz",
+                        title: "Testa dig själv",
+                        subtitle: "Lägg in frågor, Quizlet, övningsprov eller annat.",
+                        checklist: [],
+                        note: "",
+                    },
+                    {
+                        id: crypto.randomUUID(),
+                        type: "repeat",
+                        title: "Repetera",
+                        subtitle: "Lägg in sådant som ska repeteras eller göras om.",
+                        checklist: [],
+                        note: "",
+                    },
+                ],
+                resources: [],
+                questions: [],
+                routine: "",
+                selfNote: "",
+                endReview: {
+                    rating: 0,
+                    wentWell: "",
+                    difficult: "",
+                    nextFocus: "",
+                },
+            },
+            updated_at: new Date().toISOString(),
+        };
+
+        const query = selectedTemplate
+            ? supabase
+                .from("admin_study_templates")
+                .update(templatePayload)
+                .eq("id", selectedTemplate.id)
+            : supabase
+                .from("admin_study_templates")
+                .insert(templatePayload);
+
+        const { data, error } = selectedTemplate
+            ? await supabase
+                .from("admin_study_templates")
+                .update(templatePayload)
+                .eq("id", selectedTemplate.id)
+                .select()
+                .single()
+            : await supabase
+                .from("admin_study_templates")
+                .insert(templatePayload)
+                .select()
+                .single();
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        closeTemplateEditor();
+
+        if (data?.id) {
+            window.location.href = `/admin/studiepass/${data.id}`;
+            return;
+        }
+
+        loadAdminData();
+    }
+
+    async function deleteStudyTemplate(templateId: string) {
+        const confirmed = window.confirm("Vill du ta bort detta förplanerade studiepass?");
+
+        if (!confirmed) return;
+
+        const { error } = await supabase
+            .from("admin_study_templates")
+            .delete()
+            .eq("id", templateId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        loadAdminData();
+    }
+
+    function openSendTemplate(template: AdminStudyTemplate) {
+        setTemplateToSend(template);
+        setSelectedStudentIdsToSend([]);
+        setOpenSendClassIds([]);
+        setSendOtherUsersOpen(false);
+    }
+
+    function closeSendTemplate() {
+        setTemplateToSend(null);
+        setSelectedStudentIdsToSend([]);
+        setOpenSendClassIds([]);
+        setSendOtherUsersOpen(false);
+    }
+
+    function toggleStudentForTemplate(studentId: string) {
+        setSelectedStudentIdsToSend((current) =>
+            current.includes(studentId)
+                ? current.filter((id) => id !== studentId)
+                : [...current, studentId]
+        );
+    }
+
+    function toggleSendClassOpen(classId: string) {
+        setOpenSendClassIds((current) =>
+            current.includes(classId)
+                ? current.filter((id) => id !== classId)
+                : [...current, classId]
+        );
+    }
+
+    function toggleAllStudentsInClass(studentIds: string[]) {
+        const allSelected = studentIds.every((studentId) =>
+            selectedStudentIdsToSend.includes(studentId)
+        );
+
+        setSelectedStudentIdsToSend((current) => {
+            if (allSelected) {
+                return current.filter((studentId) => !studentIds.includes(studentId));
+            }
+
+            return Array.from(new Set([...current, ...studentIds]));
+        });
+    }
+
+    function toggleAllOtherUsers(studentIds: string[]) {
+        toggleAllStudentsInClass(studentIds);
+    }
+
+    async function sendTemplateToStudents() {
+        if (!templateToSend || selectedStudentIdsToSend.length === 0) {
+            alert("Välj minst en elev.");
+            return;
+        }
+
+        const rows = selectedStudentIdsToSend.map((studentId) => ({
+            template_id: templateToSend.id,
+            admin_id: templateToSend.admin_id,
+            student_id: studentId,
+            title: templateToSend.title,
+            subject: templateToSend.subject,
+            area: templateToSend.area,
+            duration: templateToSend.duration,
+            planning: templateToSend.planning,
+            planning_data: templateToSend.planning_data,
+            status: "available",
+        }));
+
+        const { error } = await supabase
+            .from("assigned_study_templates")
+            .insert(rows);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        alert(`Studiepasset skickades till ${selectedStudentIdsToSend.length} elev(er).`);
+        closeSendTemplate();
     }
 
     async function deleteClass(classId: string) {
@@ -431,6 +799,149 @@ export default function AdminPage() {
             <p style={{ color: "#94a3b8" }}>
                 Se alla användare, deras profiler och alla Pepp-inlägg.
             </p>
+
+            <section style={cardStyle}>
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "14px",
+                        flexWrap: "wrap",
+                    }}
+                >
+                    <div>
+                        <h2 style={{ margin: 0 }}>📚 Förplanerade studiepass</h2>
+                        <p style={{ margin: "6px 0 0", color: "#94a3b8" }}>
+                            Skapa färdiga studiepass som du senare kan skicka till elever.
+                        </p>
+                    </div>
+
+                    <button onClick={openNewTemplateEditor} style={primaryButtonStyle}>
+                        + Skapa studiepass
+                    </button>
+                </div>
+
+                {showTemplateEditor && (
+                    <div style={templateEditorStyle}>
+                        <h3 style={{ marginTop: 0 }}>
+                            {selectedTemplate ? "Redigera studiepass" : "Skapa studiepass"}
+                        </h3>
+
+                        <div style={templateFormGridStyle}>
+                            <input
+                                value={templateTitle}
+                                onChange={(event) => setTemplateTitle(event.target.value)}
+                                placeholder="Titel, t.ex. Algebra grunder"
+                                style={inputStyle}
+                            />
+
+                            <input
+                                value={templateSubject}
+                                onChange={(event) => setTemplateSubject(event.target.value)}
+                                placeholder="Ämne, t.ex. Matematik"
+                                style={inputStyle}
+                            />
+
+                            <input
+                                value={templateArea}
+                                onChange={(event) => setTemplateArea(event.target.value)}
+                                placeholder="Område, t.ex. Ekvationer"
+                                style={inputStyle}
+                            />
+
+                            <input
+                                type="number"
+                                min={1}
+                                value={templateDuration}
+                                onChange={(event) => setTemplateDuration(Number(event.target.value))}
+                                placeholder="Minuter"
+                                style={inputStyle}
+                            />
+                        </div>
+
+                        <textarea
+                            value={templatePlanning}
+                            onChange={(event) => setTemplatePlanning(event.target.value)}
+                            placeholder="Vad ska eleven göra under passet?"
+                            rows={5}
+                            style={{ ...inputStyle, marginTop: "12px", resize: "vertical" }}
+                        />
+
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "flex-end",
+                                gap: "10px",
+                                marginTop: "14px",
+                                flexWrap: "wrap",
+                            }}
+                        >
+                            <button onClick={closeTemplateEditor} style={secondaryButtonStyle}>
+                                Avbryt
+                            </button>
+
+                            <button onClick={saveStudyTemplate} style={primaryButtonStyle}>
+                                Spara studiepass
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {studyTemplates.length === 0 ? (
+                    <p style={{ color: "#94a3b8", marginBottom: 0 }}>
+                        Du har inte skapat några förplanerade studiepass ännu.
+                    </p>
+                ) : (
+                    <div style={templateListStyle}>
+                        {studyTemplates.map((template) => (
+                            <article key={template.id} style={templateCardStyle}>
+                                <div>
+                                    <strong style={{ fontSize: "17px" }}>{template.title}</strong>
+
+                                    <p style={{ margin: "6px 0 0", color: "#94a3b8" }}>
+                                        {template.subject}
+                                        {template.area ? ` · ${template.area}` : ""} · {template.duration} min
+                                    </p>
+
+                                    {template.planning && (
+                                        <p style={{ margin: "10px 0 0", color: "#cbd5e1" }}>
+                                            {template.planning.length > 120
+                                                ? `${template.planning.slice(0, 120)}...`
+                                                : template.planning}
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div style={templateButtonColumnStyle}>
+                                    <button
+                                        onClick={() => {
+                                            window.location.href = `/admin/studiepass/${template.id}`;
+                                        }}
+                                        style={secondaryButtonStyle}
+                                    >
+                                        Redigera pass
+                                    </button>
+
+                                    <button
+                                        onClick={() => openSendTemplate(template)}
+                                        style={primaryButtonStyle}
+                                    >
+                                        Skicka
+                                    </button>
+
+                                    <button
+                                        onClick={() => deleteStudyTemplate(template.id)}
+                                        style={dangerSmallButtonStyle}
+                                    >
+                                        Ta bort
+                                    </button>
+                                </div>
+                            </article>
+                        ))}
+                    </div>
+                )}
+            </section>
 
             <section className="admin-layout" style={adminLayoutStyle}>
                 <section style={cardStyle}>
@@ -585,9 +1096,73 @@ export default function AdminPage() {
                             <section style={profileCardStyle}>
                                 <div>
                                     <p style={{ margin: 0, color: "#94a3b8" }}>Användarnamn</p>
-                                    <h2 style={{ margin: "6px 0 0", fontSize: "32px" }}>
-                                        {selectedProfile.username || "Okänt användarnamn"}
-                                    </h2>
+
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            gap: "10px",
+                                            marginTop: "10px",
+                                            alignItems: "center",
+                                            flexWrap: "wrap",
+                                        }}
+                                    >
+                                        <input
+                                            value={adminUsernameInput}
+                                            onChange={(event) => setAdminUsernameInput(event.target.value)}
+                                            placeholder="Användarnamn"
+                                            style={{
+                                                ...inputStyle,
+                                                maxWidth: "320px",
+                                                fontSize: "22px",
+                                                fontWeight: "bold",
+                                            }}
+                                        />
+
+                                        <button
+                                            onClick={saveAdminUsername}
+                                            disabled={
+                                                savingAdminUsername ||
+                                                adminUsernameInput.trim() === selectedProfile.username
+                                            }
+                                            style={{
+                                                ...primaryButtonStyle,
+                                                opacity:
+                                                    savingAdminUsername ||
+                                                        adminUsernameInput.trim() === selectedProfile.username
+                                                        ? 0.55
+                                                        : 1,
+                                            }}
+                                        >
+                                            {savingAdminUsername ? "Sparar..." : "Spara namn"}
+                                        </button>
+                                    </div>
+
+                                    <label
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "10px",
+                                            marginTop: "14px",
+                                            color: "#cbd5e1",
+                                            fontWeight: "bold",
+                                            cursor: "pointer",
+                                        }}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedProfile.username_locked ?? false}
+                                            onChange={(event) =>
+                                                toggleUsernameLock(selectedProfile.id, event.target.checked)
+                                            }
+                                            style={{
+                                                width: "16px",
+                                                height: "16px",
+                                                cursor: "pointer",
+                                            }}
+                                        />
+
+                                        Lås användarens möjlighet att byta namn
+                                    </label>
                                     <div
                                         style={{
                                             marginTop: "18px",
@@ -719,6 +1294,282 @@ export default function AdminPage() {
                     )}
                 </section>
             </section>
+
+            {templateToSend && (
+                <div
+                    onClick={closeSendTemplate}
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        background: "rgba(0,0,0,0.62)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 80,
+                        padding: "18px",
+                    }}
+                >
+                    <div
+                        onClick={(event) => event.stopPropagation()}
+                        style={{
+                            width: "620px",
+                            maxWidth: "100%",
+                            maxHeight: "82vh",
+                            overflowY: "auto",
+                            background: "#0f172a",
+                            border: "1px solid rgba(148, 163, 184, 0.25)",
+                            borderRadius: "22px",
+                            padding: "22px",
+                            boxShadow: "0 24px 80px rgba(0,0,0,0.55)",
+                        }}
+                    >
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                gap: "14px",
+                                alignItems: "flex-start",
+                            }}
+                        >
+                            <div>
+                                <h2 style={{ margin: 0 }}>Skicka studiepass</h2>
+                                <p style={{ margin: "6px 0 0", color: "#94a3b8" }}>
+                                    {templateToSend.title} · {templateToSend.subject}
+                                    {templateToSend.area ? ` · ${templateToSend.area}` : ""}
+                                </p>
+                            </div>
+
+                            <button onClick={closeSendTemplate} style={secondaryButtonStyle}>
+                                ✕
+                            </button>
+                        </div>
+
+                        <p style={{ color: "#cbd5e1", marginTop: "18px" }}>
+                            Välj vilka elever som ska få passet.
+                        </p>
+
+                        <div style={{ display: "grid", gap: "12px" }}>
+                            {adminClasses.map((adminClass) => {
+                                const studentsInClassRows = classStudents.filter(
+                                    (row) => row.class_id === adminClass.id
+                                );
+
+                                const studentIds = studentsInClassRows.map((row) => row.student_id);
+                                const isOpen = openSendClassIds.includes(adminClass.id);
+
+                                const allSelected =
+                                    studentIds.length > 0 &&
+                                    studentIds.every((studentId) =>
+                                        selectedStudentIdsToSend.includes(studentId)
+                                    );
+
+                                return (
+                                    <div key={adminClass.id} style={classBoxStyle}>
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                                gap: "10px",
+                                                flexWrap: "wrap",
+                                            }}
+                                        >
+                                            <button
+                                                onClick={() => toggleSendClassOpen(adminClass.id)}
+                                                style={classFolderButtonStyle}
+                                            >
+                                                {isOpen ? "📂" : "📁"} {adminClass.name}
+                                                <span style={{ color: "#94a3b8", marginLeft: "6px" }}>
+                                                    ({studentsInClassRows.length})
+                                                </span>
+                                            </button>
+
+                                            {studentsInClassRows.length > 0 && (
+                                                <button
+                                                    onClick={() => toggleAllStudentsInClass(studentIds)}
+                                                    style={secondaryButtonStyle}
+                                                >
+                                                    {allSelected ? "Avmarkera alla" : "Markera alla"}
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {isOpen && (
+                                            <>
+                                                {studentsInClassRows.length === 0 ? (
+                                                    <p style={{ color: "#94a3b8", marginBottom: 0 }}>
+                                                        Inga elever i klassen.
+                                                    </p>
+                                                ) : (
+                                                    <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
+                                                        {studentsInClassRows.map((row) => {
+                                                            const student = profiles.find(
+                                                                (profile) => profile.id === row.student_id
+                                                            );
+
+                                                            const checked = selectedStudentIdsToSend.includes(row.student_id);
+
+                                                            return (
+                                                                <label
+                                                                    key={row.id}
+                                                                    style={{
+                                                                        display: "flex",
+                                                                        alignItems: "center",
+                                                                        gap: "10px",
+                                                                        padding: "10px",
+                                                                        borderRadius: "12px",
+                                                                        background: checked
+                                                                            ? "rgba(37, 99, 235, 0.2)"
+                                                                            : "rgba(15, 23, 42, 0.6)",
+                                                                        border: checked
+                                                                            ? "1px solid rgba(96, 165, 250, 0.75)"
+                                                                            : "1px solid rgba(148, 163, 184, 0.18)",
+                                                                        cursor: "pointer",
+                                                                    }}
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={checked}
+                                                                        onChange={() => toggleStudentForTemplate(row.student_id)}
+                                                                    />
+
+                                                                    <span style={{ fontWeight: "bold" }}>
+                                                                        {student?.username || "Okänd användare"}
+                                                                    </span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                );
+                            })}
+
+                            {(() => {
+                                const otherUsers = profiles
+                                    .filter((profile) => !profile.is_admin)
+                                    .filter((profile) => !isStudentInAnyClass(profile.id))
+                                    .sort((a, b) =>
+                                        (a.username || "").localeCompare(b.username || "", "sv")
+                                    );
+
+                                const otherUserIds = otherUsers.map((profile) => profile.id);
+
+                                const allOtherSelected =
+                                    otherUserIds.length > 0 &&
+                                    otherUserIds.every((studentId) =>
+                                        selectedStudentIdsToSend.includes(studentId)
+                                    );
+
+                                return (
+                                    <div style={classBoxStyle}>
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                                gap: "10px",
+                                                flexWrap: "wrap",
+                                            }}
+                                        >
+                                            <button
+                                                onClick={() => setSendOtherUsersOpen((current) => !current)}
+                                                style={classFolderButtonStyle}
+                                            >
+                                                {sendOtherUsersOpen ? "📂" : "📁"} Övriga användare
+                                                <span style={{ color: "#94a3b8", marginLeft: "6px" }}>
+                                                    ({otherUsers.length})
+                                                </span>
+                                            </button>
+
+                                            {otherUsers.length > 0 && (
+                                                <button
+                                                    onClick={() => toggleAllOtherUsers(otherUserIds)}
+                                                    style={secondaryButtonStyle}
+                                                >
+                                                    {allOtherSelected ? "Avmarkera alla" : "Markera alla"}
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {sendOtherUsersOpen && (
+                                            <>
+                                                {otherUsers.length === 0 ? (
+                                                    <p style={{ color: "#94a3b8", marginBottom: 0 }}>
+                                                        Inga övriga användare.
+                                                    </p>
+                                                ) : (
+                                                    <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
+                                                        {otherUsers.map((student) => {
+                                                            const checked = selectedStudentIdsToSend.includes(student.id);
+
+                                                            return (
+                                                                <label
+                                                                    key={student.id}
+                                                                    style={{
+                                                                        display: "flex",
+                                                                        alignItems: "center",
+                                                                        gap: "10px",
+                                                                        padding: "10px",
+                                                                        borderRadius: "12px",
+                                                                        background: checked
+                                                                            ? "rgba(37, 99, 235, 0.2)"
+                                                                            : "rgba(15, 23, 42, 0.6)",
+                                                                        border: checked
+                                                                            ? "1px solid rgba(96, 165, 250, 0.75)"
+                                                                            : "1px solid rgba(148, 163, 184, 0.18)",
+                                                                        cursor: "pointer",
+                                                                    }}
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={checked}
+                                                                        onChange={() => toggleStudentForTemplate(student.id)}
+                                                                    />
+
+                                                                    <span style={{ fontWeight: "bold" }}>
+                                                                        {student.username || "Inget användarnamn"}
+                                                                    </span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        <div
+                            style={{
+                                position: "sticky",
+                                bottom: "-22px",
+                                margin: "18px -22px -22px",
+                                padding: "14px 22px",
+                                background: "rgba(15, 23, 42, 0.96)",
+                                borderTop: "1px solid rgba(148, 163, 184, 0.22)",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                gap: "12px",
+                                flexWrap: "wrap",
+                            }}
+                        >
+                            <span style={{ color: "#94a3b8", fontWeight: "bold" }}>
+                                {selectedStudentIdsToSend.length} vald(a)
+                            </span>
+
+                            <button onClick={sendTemplateToStudents} style={primaryButtonStyle}>
+                                Skicka till elever
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <section style={cardStyle}>
                 <h2>Alla Pepp-inlägg</h2>
@@ -958,4 +1809,54 @@ const classFolderButtonStyle = {
     textAlign: "left" as const,
     padding: 0,
     fontSize: "15px",
+};
+
+const secondaryButtonStyle = {
+    padding: "10px 12px",
+    borderRadius: "12px",
+    border: "1px solid rgba(148, 163, 184, 0.3)",
+    background: "rgba(30, 41, 59, 0.8)",
+    color: "#e2e8f0",
+    fontWeight: "bold",
+    cursor: "pointer",
+    whiteSpace: "nowrap" as const,
+};
+
+const templateEditorStyle = {
+    marginTop: "18px",
+    padding: "18px",
+    borderRadius: "18px",
+    background: "rgba(30, 41, 59, 0.58)",
+    border: "1px solid rgba(148, 163, 184, 0.22)",
+};
+
+const templateFormGridStyle = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: "10px",
+};
+
+const templateListStyle = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+    gap: "14px",
+    marginTop: "18px",
+};
+
+const templateCardStyle = {
+    padding: "16px",
+    borderRadius: "18px",
+    background: "rgba(30, 41, 59, 0.72)",
+    border: "1px solid rgba(148, 163, 184, 0.2)",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "14px",
+    alignItems: "flex-start",
+};
+
+const templateButtonColumnStyle = {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: "8px",
+    flexShrink: 0,
 };

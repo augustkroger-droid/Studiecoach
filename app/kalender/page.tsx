@@ -40,6 +40,22 @@ type Exam = {
     created_at?: string;
 };
 
+type AssignedStudyTemplate = {
+    id: string;
+    template_id: string | null;
+    admin_id: string;
+    student_id: string;
+    title: string;
+    subject: string;
+    area: string;
+    duration: number;
+    planning: string | null;
+    planning_data: any;
+    status: "available" | "used";
+    created_at: string;
+    used_at?: string | null;
+};
+
 type PopupMode = null | "session" | "exam" | "copySession";
 
 function getStartOfWeek(offset: number) {
@@ -79,6 +95,7 @@ export default function KalenderPage() {
     const [weekOffset, setWeekOffset] = useState(0);
     const [sessions, setSessions] = useState<StudySession[]>([]);
     const [exams, setExams] = useState<Exam[]>([]);
+    const [assignedTemplates, setAssignedTemplates] = useState<AssignedStudyTemplate[]>([]);
 
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [selectedSession, setSelectedSession] = useState<StudySession | null>(null);
@@ -108,8 +125,16 @@ export default function KalenderPage() {
 
         return localStorage.getItem("calendarExamBoxMinimized") === "true";
     });
+    const [isAssignedBoxMinimized, setIsAssignedBoxMinimized] = useState(() => {
+        if (typeof window === "undefined") return false;
+
+        return localStorage.getItem("calendarAssignedBoxMinimized") === "true";
+    });
+    const [expandedAssignedTemplateId, setExpandedAssignedTemplateId] = useState<string | null>(null);
 
     const [draggedSession, setDraggedSession] = useState<StudySession | null>(null);
+    const [draggedAssignedTemplate, setDraggedAssignedTemplate] = useState<AssignedStudyTemplate | null>(null);
+    const [assignedDragPosition, setAssignedDragPosition] = useState<{ x: number; y: number } | null>(null);
     const [dragOverSessionId, setDragOverSessionId] = useState<string | null>(null);
     const [dragPreviewDate, setDragPreviewDate] = useState<string | null>(null);
     const [dragTargetSession, setDragTargetSession] = useState<StudySession | null>(null);
@@ -123,6 +148,7 @@ export default function KalenderPage() {
         loadSessions();
         loadExams();
         loadWeeklyGoal();
+        loadAssignedTemplates();
     }, [weekOffset]);
 
     function getCurrentWeekStartString() {
@@ -132,6 +158,11 @@ export default function KalenderPage() {
     function updateExamBoxMinimized(nextValue: boolean) {
         setIsExamBoxMinimized(nextValue);
         localStorage.setItem("calendarExamBoxMinimized", String(nextValue));
+    }
+
+    function updateAssignedBoxMinimized(nextValue: boolean) {
+        setIsAssignedBoxMinimized(nextValue);
+        localStorage.setItem("calendarAssignedBoxMinimized", String(nextValue));
     }
 
     function updateGoalBoxMinimized(nextValue: boolean) {
@@ -274,6 +305,122 @@ export default function KalenderPage() {
         setExams(data || []);
     }
 
+    async function loadAssignedTemplates() {
+        const { data: userData } = await supabase.auth.getUser();
+        const user = userData.user;
+
+        if (!user) return;
+
+        const { data, error } = await supabase
+            .from("assigned_study_templates")
+            .select("*")
+            .eq("student_id", user.id)
+            .eq("status", "available")
+            .order("created_at", { ascending: false });
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setAssignedTemplates(data || []);
+    }
+
+    async function deleteAssignedTemplate(templateId: string) {
+        const confirmed = window.confirm("Vill du ta bort detta förplanerade pass?");
+
+        if (!confirmed) return;
+
+        const { error } = await supabase
+            .from("assigned_study_templates")
+            .delete()
+            .eq("id", templateId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        loadAssignedTemplates();
+    }
+
+    async function createSessionFromAssignedTemplate(
+        template: AssignedStudyTemplate,
+        date: Date
+    ) {
+        const { data: userData } = await supabase.auth.getUser();
+        const user = userData.user;
+
+        if (!user) {
+            window.location.href = "/login";
+            return;
+        }
+
+        const dateString = formatDate(date);
+
+        const { data: profileData } = await supabase
+            .from("profiles")
+            .select("default_study_routine, default_self_note")
+            .eq("id", user.id)
+            .single();
+
+        const planningDataWithProfileDefaults = {
+            ...(template.planning_data || {}),
+            routine:
+                profileData?.default_study_routine ||
+                template.planning_data?.routine ||
+                "",
+            selfNote:
+                profileData?.default_self_note ||
+                template.planning_data?.selfNote ||
+                "",
+        };
+
+        const sessionsSameDay = sessions.filter(
+            (session) => session.date === dateString
+        );
+
+        const nextSortOrder =
+            sessionsSameDay.length > 0
+                ? Math.max(...sessionsSameDay.map((session) => session.sort_order ?? 0)) + 1
+                : 0;
+
+        const { error: sessionError } = await supabase.from("study_sessions").insert({
+            user_id: user.id,
+            subject: template.subject,
+            duration: template.duration,
+            date: dateString,
+            status: "planned",
+            sort_order: nextSortOrder,
+            start_time: null,
+            planning: template.planning || null,
+            planning_data: planningDataWithProfileDefaults,
+        });
+
+        if (sessionError) {
+            alert(sessionError.message);
+            return;
+        }
+
+        const { error: templateError } = await supabase
+            .from("assigned_study_templates")
+            .update({
+                status: "used",
+                used_at: new Date().toISOString(),
+            })
+            .eq("id", template.id);
+
+        if (templateError) {
+            alert(templateError.message);
+            return;
+        }
+
+        setDraggedAssignedTemplate(null);
+        setExpandedAssignedTemplateId(null);
+        loadSessions();
+        loadAssignedTemplates();
+    }
+
     function openAddPopup(date: Date) {
         setSelectedSession(null);
         setSelectedExam(null);
@@ -372,6 +519,12 @@ export default function KalenderPage() {
                 ? Math.max(...sessionsSameDay.map((session) => session.sort_order ?? 0)) + 1
                 : 0;
 
+        const { data: profileData } = await supabase
+            .from("profiles")
+            .select("default_study_routine, default_self_note")
+            .eq("id", user.id)
+            .single();
+
         const { error } = await supabase.from("study_sessions").insert({
             user_id: user.id,
             subject,
@@ -380,6 +533,10 @@ export default function KalenderPage() {
             status: "planned",
             sort_order: nextSortOrder,
             start_time: startTime || null,
+            planning_data: {
+                routine: profileData?.default_study_routine || "",
+                selfNote: profileData?.default_self_note || "",
+            },
         });
 
         if (error) {
@@ -930,6 +1087,11 @@ export default function KalenderPage() {
                                 onClick={() => openAddPopup(date)}
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={() => {
+                                    if (draggedAssignedTemplate) {
+                                        createSessionFromAssignedTemplate(draggedAssignedTemplate, date);
+                                        return;
+                                    }
+
                                     if (draggedSession) {
                                         moveSessionToDate(draggedSession, date);
                                         setDraggedSession(null);
@@ -1268,6 +1430,229 @@ export default function KalenderPage() {
                         </>
                     )}
                 </section>
+                <section
+                    className="calendar-assigned-card"
+                    onClick={() => {
+                        if (isAssignedBoxMinimized) {
+                            updateAssignedBoxMinimized(false);
+                        }
+                    }}
+                    style={{
+                        position: "fixed",
+                        left: "50%",
+                        bottom: "20px",
+                        transform: "translateX(-50%)",
+                        width: isAssignedBoxMinimized ? "210px" : "330px",
+                        maxHeight: isAssignedBoxMinimized ? "74px" : "48vh",
+                        overflowY: isAssignedBoxMinimized ? "hidden" : "auto",
+                        padding: isAssignedBoxMinimized ? "14px 16px" : "18px",
+                        borderRadius: "22px",
+                        background: theme.card,
+                        border: `1px solid ${theme.border}`,
+                        boxShadow: "0 25px 60px rgba(0,0,0,0.45)",
+                        backdropFilter: "blur(12px)",
+                        cursor: isAssignedBoxMinimized ? "pointer" : "default",
+                        transition: "all 0.25s ease",
+                    }}
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "flex-start",
+                            gap: "12px",
+                        }}
+                    >
+                        <div>
+                            <h2
+                                style={{
+                                    margin: 0,
+                                    fontSize: isAssignedBoxMinimized ? "17px" : "20px",
+                                }}
+                            >
+                                📦 Förplanerade pass
+                            </h2>
+
+                            <p
+                                style={{
+                                    margin: "4px 0 0",
+                                    color: "#94a3b8",
+                                    fontSize: "13px",
+                                }}
+                            >
+                                {isAssignedBoxMinimized
+                                    ? `${assignedTemplates.length} pass`
+                                    : "Pass som din lärare skickat"}
+                            </p>
+                        </div>
+
+                        {!isAssignedBoxMinimized && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateAssignedBoxMinimized(true);
+                                }}
+                                style={{
+                                    width: "38px",
+                                    height: "38px",
+                                    borderRadius: "12px",
+                                    border: "1px solid rgba(148, 163, 184, 0.3)",
+                                    background: "rgba(30, 41, 59, 0.85)",
+                                    color: "#e2e8f0",
+                                    cursor: "pointer",
+                                    fontWeight: "bold",
+                                    fontSize: "18px",
+                                    flexShrink: 0,
+                                }}
+                                title="Minimera förplanerade pass"
+                            >
+                                −
+                            </button>
+                        )}
+                    </div>
+
+                    {!isAssignedBoxMinimized && (
+                        <>
+                            {assignedTemplates.length === 0 ? (
+                                <p style={{ color: "#94a3b8", margin: "14px 0 0", fontSize: "14px" }}>
+                                    Inga förplanerade pass just nu.
+                                </p>
+                            ) : (
+                                <div style={{ display: "grid", gap: "10px", marginTop: "14px" }}>
+                                    {assignedTemplates.map((template) => {
+                                        const isExpanded = expandedAssignedTemplateId === template.id;
+
+                                        return (
+                                            <div
+                                                key={template.id}
+                                                draggable
+                                                onDragStart={(event) => {
+                                                    event.stopPropagation();
+                                                    setDraggedAssignedTemplate(template);
+                                                    setAssignedDragPosition({ x: event.clientX, y: event.clientY });
+
+                                                    const emptyImage = new Image();
+                                                    emptyImage.src =
+                                                        "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+                                                    event.dataTransfer.setDragImage(emptyImage, 0, 0);
+                                                }}
+                                                onDrag={(event) => {
+                                                    if (event.clientX === 0 && event.clientY === 0) return;
+                                                    setAssignedDragPosition({ x: event.clientX, y: event.clientY });
+                                                }}
+                                                onDragEnd={() => {
+                                                    setDraggedAssignedTemplate(null);
+                                                    setAssignedDragPosition(null);
+                                                }}
+                                                onClick={() =>
+                                                    setExpandedAssignedTemplateId((current) =>
+                                                        current === template.id ? null : template.id
+                                                    )
+
+                                                }
+                                                style={{
+                                                    padding: "10px 11px",
+                                                    borderRadius: "12px",
+                                                    background: "rgba(37, 99, 235, 0.88)",
+                                                    border: "1px solid rgba(191, 219, 254, 0.28)",
+                                                    color: "#ffffff",
+                                                    cursor: "pointer",
+                                                    boxShadow: "0 8px 18px rgba(0,0,0,0.28)",
+                                                }}
+                                            >
+                                                <strong
+                                                    style={{
+                                                        display: "block",
+                                                        fontSize: "14px",
+                                                        lineHeight: 1.25,
+                                                        overflowWrap: "anywhere",
+                                                    }}
+                                                >
+                                                    📚 {template.title}
+                                                </strong>
+
+                                                <div
+                                                    style={{
+                                                        marginTop: "4px",
+                                                        fontSize: "12px",
+                                                        opacity: 0.88,
+                                                    }}
+                                                >
+                                                    {template.subject}
+                                                    {template.area ? ` · ${template.area}` : ""} · {template.duration} min
+                                                </div>
+
+                                                {isExpanded && (
+                                                    <div
+                                                        onClick={(event) => event.stopPropagation()}
+                                                        style={{
+                                                            marginTop: "10px",
+                                                            display: "grid",
+                                                            gap: "8px",
+                                                        }}
+                                                    >
+                                                        {template.planning && (
+                                                            <p
+                                                                style={{
+                                                                    margin: 0,
+                                                                    padding: "9px",
+                                                                    borderRadius: "10px",
+                                                                    background: "rgba(15, 23, 42, 0.28)",
+                                                                    fontSize: "12px",
+                                                                    lineHeight: 1.4,
+                                                                    color: "#dbeafe",
+                                                                }}
+                                                            >
+                                                                {template.planning.length > 100
+                                                                    ? `${template.planning.slice(0, 100)}...`
+                                                                    : template.planning}
+                                                            </p>
+                                                        )}
+
+                                                        <button
+                                                            onClick={() => {
+                                                                window.location.href = `/forplanerat/${template.id}`;
+                                                            }}
+                                                            style={{
+                                                                width: "100%",
+                                                                padding: "9px",
+                                                                borderRadius: "10px",
+                                                                border: "1px solid rgba(191, 219, 254, 0.45)",
+                                                                background: "rgba(15, 23, 42, 0.25)",
+                                                                color: "#ffffff",
+                                                                fontWeight: "bold",
+                                                                cursor: "pointer",
+                                                            }}
+                                                        >
+                                                            Redigera pass
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() => deleteAssignedTemplate(template.id)}
+                                                            style={{
+                                                                width: "100%",
+                                                                padding: "9px",
+                                                                borderRadius: "10px",
+                                                                border: "1px solid rgba(254, 202, 202, 0.55)",
+                                                                background: "rgba(239, 68, 68, 0.22)",
+                                                                color: "#fee2e2",
+                                                                fontWeight: "bold",
+                                                                cursor: "pointer",
+                                                            }}
+                                                        >
+                                                            Ta bort
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </section>
+
                 <aside
                     className="calendar-exam-card"
                     onClick={() => {
@@ -1836,6 +2221,32 @@ export default function KalenderPage() {
                                 )}
                             </>
                         )}
+                    </div>
+                </div>
+            )}
+            {draggedAssignedTemplate && assignedDragPosition && (
+                <div
+                    style={{
+                        position: "fixed",
+                        left: assignedDragPosition.x - 110,
+                        top: assignedDragPosition.y - 32,
+                        zIndex: 9999,
+                        pointerEvents: "none",
+                        width: "220px",
+                        padding: "10px",
+                        borderRadius: "12px",
+                        background: "#2563eb",
+                        color: "white",
+                        boxShadow: "0 18px 40px rgba(0,0,0,0.45)",
+                        border: "1px solid rgba(191, 219, 254, 0.35)",
+                        fontWeight: "bold",
+                        transform: "rotate(-2deg) scale(1.03)",
+                        transition: "transform 0.05s linear",
+                    }}
+                >
+                    📚 {draggedAssignedTemplate.title}
+                    <div style={{ fontSize: "12px", opacity: 0.85, marginTop: "4px" }}>
+                        {draggedAssignedTemplate.subject} · {draggedAssignedTemplate.duration} min
                     </div>
                 </div>
             )}

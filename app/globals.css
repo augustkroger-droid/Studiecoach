@@ -291,23 +291,6 @@ body {
     font-size: 38px !important;
   }
 
-  .pass-resource-actions {
-    flex-direction: column !important;
-    width: 100% !important;
-    margin-top: 12px !important;
-  }
-
-  .pass-resource-actions button,
-  .pass-resource-actions label {
-    width: 100% !important;
-    box-sizing: border-box !important;
-    text-align: center !important;
-  }
-
-  .pass-resource-actions label {
-    display: block !important;
-  }
-
   .pass-modal-backdrop {
     align-items: flex-end !important;
     padding: 14px !important;
@@ -320,6 +303,12 @@ body {
     overflow-y: auto !important;
     border-radius: 22px 22px 18px 18px !important;
     box-sizing: border-box !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .pass-block-inner-grid {
+    grid-template-columns: 1fr !important;
   }
 }
 
@@ -518,7 +507,7 @@ body {
   gap: 12px;
 }
 
-.notification-header-actions > button:first-child {
+.notification-header-actions>button:first-child {
   padding: 11px 16px;
   border-radius: 14px;
   border: 1px solid rgba(59, 130, 246, 0.6);
@@ -647,7 +636,7 @@ body {
     gap: 8px;
   }
 
-  .notification-header-actions > button:first-child {
+  .notification-header-actions>button:first-child {
     padding: 9px 12px;
     font-size: 13px;
   }
@@ -670,5 +659,53 @@ body {
 
   .notification-content span {
     font-size: 12px;
+  }
+}
+
+.pass-theme-picker-wrapper {
+  position: fixed;
+  top: 24px;
+  right: 250px;
+  z-index: 20;
+}
+
+@media (max-width: 900px) {
+  .pass-theme-picker-wrapper {
+    position: static;
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+    margin-bottom: 10px;
+  }
+}
+
+.pass-timer-card .theme-picker {
+  position: static !important;
+  width: 100% !important;
+  margin: 0 0 12px 0 !important;
+  box-sizing: border-box !important;
+  justify-content: space-between !important;
+}
+
+.pass-timer-card .theme-picker select {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+@media (max-width: 1000px) {
+  .profile-layout {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 1200px) {
+  .profile-stats-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .profile-stats-grid {
+    grid-template-columns: 1fr 1fr !important;
   }
 }
