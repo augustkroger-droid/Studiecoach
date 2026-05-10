@@ -93,6 +93,11 @@ export default function KalenderPage() {
 
     const [goalHours, setGoalHours] = useState("");
     const [weeklyGoalMinutes, setWeeklyGoalMinutes] = useState(0);
+    const [isGoalBoxMinimized, setIsGoalBoxMinimized] = useState(() => {
+        if (typeof window === "undefined") return false;
+
+        return localStorage.getItem("calendarGoalBoxMinimized") === "true";
+    });
 
     const [examName, setExamName] = useState("");
     const [examDate, setExamDate] = useState("");
@@ -127,6 +132,11 @@ export default function KalenderPage() {
     function updateExamBoxMinimized(nextValue: boolean) {
         setIsExamBoxMinimized(nextValue);
         localStorage.setItem("calendarExamBoxMinimized", String(nextValue));
+    }
+
+    function updateGoalBoxMinimized(nextValue: boolean) {
+        setIsGoalBoxMinimized(nextValue);
+        localStorage.setItem("calendarGoalBoxMinimized", String(nextValue));
     }
 
     async function loadWeeklyGoal() {
@@ -1083,9 +1093,16 @@ export default function KalenderPage() {
             >
                 <section
                     className="calendar-goal-card"
+                    onClick={() => {
+                        if (isGoalBoxMinimized) {
+                            updateGoalBoxMinimized(false);
+                        }
+                    }}
                     style={{
-                        width: "320px",
-                        padding: "18px",
+                        width: isGoalBoxMinimized ? "190px" : "320px",
+                        maxHeight: isGoalBoxMinimized ? "74px" : "none",
+                        overflow: isGoalBoxMinimized ? "hidden" : "visible",
+                        padding: isGoalBoxMinimized ? "14px 16px" : "18px",
                         borderRadius: "20px",
                         background: theme.card,
                         border: `1px solid ${theme.border}`,
@@ -1093,103 +1110,162 @@ export default function KalenderPage() {
                         backdropFilter: "blur(12px)",
                     }}
                 >
-                    <h2 style={{ margin: 0, fontSize: "20px" }}>🎯 Veckomål</h2>
-
-                    <p style={{ margin: "6px 0 14px", color: "#94a3b8", fontSize: "13px" }}>
-                        Hur många timmar vill du plugga denna vecka?
-                    </p>
-
-                    <div style={{ display: "flex", gap: "10px" }}>
-                        <input
-                            placeholder="Timmar"
-                            type="number"
-                            value={goalHours}
-                            onChange={(e) => setGoalHours(e.target.value)}
-                            style={{
-                                width: "100px",
-                                padding: "12px",
-                                borderRadius: "12px",
-                                border: "1px solid rgba(148, 163, 184, 0.35)",
-                                background: "rgba(2, 6, 23, 0.75)",
-                                color: "white",
-                                outline: "none",
-                            }}
-                        />
-
-                        <button
-                            onClick={saveWeeklyGoal}
-                            style={{
-                                padding: "12px 14px",
-                                borderRadius: "12px",
-                                border: "none",
-                                background: "#2563eb",
-                                color: "white",
-                                fontWeight: "bold",
-                                cursor: "pointer",
-                            }}
-                        >
-                            Spara
-                        </button>
-                    </div>
-
-                    {weeklyGoalMinutes > 0 && (
-                        <div style={{ marginTop: "14px" }}>
-                            <div
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: "12px",
+                        }}
+                    >
+                        <div>
+                            <h2
                                 style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    marginBottom: "6px",
-                                    fontSize: "14px",
-                                    fontWeight: "bold",
+                                    margin: 0,
+                                    fontSize: isGoalBoxMinimized ? "17px" : "20px",
                                 }}
                             >
-                                <span>{formatStudyTime(studiedMinutesThisWeek)}</span>
-                                <span>{formatStudyTime(weeklyGoalMinutes)}</span>
-                            </div>
+                                🎯 Veckomål
+                            </h2>
 
-                            <div
-                                style={{
-                                    height: "14px",
-                                    borderRadius: "999px",
-                                    background: "rgba(148, 163, 184, 0.22)",
-                                    overflow: "hidden",
-                                }}
-                            >
-                                <div
+                            {isGoalBoxMinimized && (
+                                <p
                                     style={{
-                                        height: "100%",
-                                        width: `${weeklyGoalPercent}%`,
-                                        borderRadius: "999px",
-                                        background: "#2563eb",
-                                        transition: "width 0.3s ease",
+                                        margin: "4px 0 0",
+                                        color: "#94a3b8",
+                                        fontSize: "13px",
                                     }}
-                                />
-                            </div>
+                                >
+                                    {weeklyGoalMinutes > 0
+                                        ? `${weeklyGoalPercent}% klart`
+                                        : "Inget mål"}
+                                </p>
+                            )}
+                        </div>
 
-                            <p style={{ color: "#94a3b8", margin: "8px 0 0", fontSize: "13px" }}>
-                                {weeklyGoalPercent}% av veckomålet
+                        {!isGoalBoxMinimized && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateGoalBoxMinimized(true);
+                                }}
+                                style={{
+                                    width: "38px",
+                                    height: "38px",
+                                    borderRadius: "12px",
+                                    border: "1px solid rgba(148, 163, 184, 0.3)",
+                                    background: "rgba(30, 41, 59, 0.85)",
+                                    color: "#e2e8f0",
+                                    cursor: "pointer",
+                                    fontWeight: "bold",
+                                    fontSize: "18px",
+                                    flexShrink: 0,
+                                }}
+                                title="Minimera veckomål"
+                            >
+                                −
+                            </button>
+                        )}
+                    </div>
+                    {!isGoalBoxMinimized && (
+                        <>
+                            <p style={{ margin: "6px 0 14px", color: "#94a3b8", fontSize: "13px" }}>
+                                Hur många timmar vill du plugga denna vecka?
                             </p>
 
-                            {weeklyGoalCompleted && (
-                                <button
-                                    onClick={postWeeklyGoalCompleted}
+                            <div style={{ display: "flex", gap: "10px" }}>
+                                <input
+                                    placeholder="Timmar"
+                                    type="number"
+                                    value={goalHours}
+                                    onChange={(e) => setGoalHours(e.target.value)}
                                     style={{
-                                        marginTop: "14px",
-                                        width: "100%",
+                                        width: "100px",
                                         padding: "12px",
                                         borderRadius: "12px",
+                                        border: "1px solid rgba(148, 163, 184, 0.35)",
+                                        background: "rgba(2, 6, 23, 0.75)",
+                                        color: "white",
+                                        outline: "none",
+                                    }}
+                                />
+
+                                <button
+                                    onClick={saveWeeklyGoal}
+                                    style={{
+                                        padding: "12px 14px",
+                                        borderRadius: "12px",
                                         border: "none",
-                                        background: "#16a34a",
+                                        background: "#2563eb",
                                         color: "white",
                                         fontWeight: "bold",
                                         cursor: "pointer",
-                                        fontSize: "15px",
                                     }}
                                 >
-                                    🎉 Posta att du klarat veckomålet
+                                    Spara
                                 </button>
+                            </div>
+
+                            {weeklyGoalMinutes > 0 && (
+                                <div style={{ marginTop: "14px" }}>
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            marginBottom: "6px",
+                                            fontSize: "14px",
+                                            fontWeight: "bold",
+                                        }}
+                                    >
+                                        <span>{formatStudyTime(studiedMinutesThisWeek)}</span>
+                                        <span>{formatStudyTime(weeklyGoalMinutes)}</span>
+                                    </div>
+
+                                    <div
+                                        style={{
+                                            height: "14px",
+                                            borderRadius: "999px",
+                                            background: "rgba(148, 163, 184, 0.22)",
+                                            overflow: "hidden",
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                height: "100%",
+                                                width: `${weeklyGoalPercent}%`,
+                                                borderRadius: "999px",
+                                                background: "#2563eb",
+                                                transition: "width 0.3s ease",
+                                            }}
+                                        />
+                                    </div>
+
+                                    <p style={{ color: "#94a3b8", margin: "8px 0 0", fontSize: "13px" }}>
+                                        {weeklyGoalPercent}% av veckomålet
+                                    </p>
+
+                                    {weeklyGoalCompleted && (
+                                        <button
+                                            onClick={postWeeklyGoalCompleted}
+                                            style={{
+                                                marginTop: "14px",
+                                                width: "100%",
+                                                padding: "12px",
+                                                borderRadius: "12px",
+                                                border: "none",
+                                                background: "#16a34a",
+                                                color: "white",
+                                                fontWeight: "bold",
+                                                cursor: "pointer",
+                                                fontSize: "15px",
+                                            }}
+                                        >
+                                            🎉 Posta att du klarat veckomålet
+                                        </button>
+                                    )}
+                                </div>
                             )}
-                        </div>
+                        </>
                     )}
                 </section>
                 <aside
@@ -1219,23 +1295,65 @@ export default function KalenderPage() {
                     <div
                         style={{
                             display: "flex",
+                            alignItems: "flex-start",
                             justifyContent: "space-between",
-                            alignItems: "center",
                             gap: "12px",
+                            width: "100%",
                         }}
                     >
-                        <div>
-                            <h2
+                        <div style={{ minWidth: 0 }}>
+                            <div
                                 style={{
-                                    margin: 0,
-                                    fontSize: isExamBoxMinimized ? "17px" : "20px",
                                     display: "flex",
                                     alignItems: "center",
-                                    gap: "6px",
+                                    gap: "10px",
+                                    flexWrap: "wrap",
                                 }}
                             >
-                                📝 Prov
-                            </h2>
+                                <h2
+                                    style={{
+                                        margin: 0,
+                                        fontSize: isExamBoxMinimized ? "17px" : "20px",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "6px",
+                                    }}
+                                >
+                                    📝 Prov
+                                </h2>
+
+                                {!isExamBoxMinimized && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const today = new Date();
+                                            setSelectedDate(today);
+                                            setSelectedSession(null);
+                                            setSelectedExam(null);
+                                            setPopupMode("exam");
+                                            setExamName("");
+                                            setExamDate(formatDate(today));
+                                            setExamColor(examColors[0].value);
+                                            setIsEditingExam(true);
+                                        }}
+                                        style={{
+                                            width: "34px",
+                                            height: "34px",
+                                            borderRadius: "11px",
+                                            border: "none",
+                                            background: "#2563eb",
+                                            color: "white",
+                                            cursor: "pointer",
+                                            fontWeight: "bold",
+                                            fontSize: "22px",
+                                            lineHeight: "34px",
+                                        }}
+                                        title="Lägg till prov"
+                                    >
+                                        +
+                                    </button>
+                                )}
+                            </div>
 
                             <p
                                 style={{
@@ -1251,108 +1369,30 @@ export default function KalenderPage() {
                         </div>
 
                         {!isExamBoxMinimized && (
-                            <div style={{ display: "flex", gap: "8px" }}>
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        updateExamBoxMinimized(true);
-                                    }}
-                                    style={{
-                                        width: "38px",
-                                        height: "38px",
-                                        borderRadius: "12px",
-                                        border: "1px solid rgba(148, 163, 184, 0.3)",
-                                        background: "rgba(30, 41, 59, 0.85)",
-                                        color: "#e2e8f0",
-                                        cursor: "pointer",
-                                        fontWeight: "bold",
-                                        fontSize: "18px",
-                                    }}
-                                    title="Minimera provlistan"
-                                >
-                                    −
-                                </button>
-
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        const today = new Date();
-                                        setSelectedDate(today);
-                                        setSelectedSession(null);
-                                        setSelectedExam(null);
-                                        setPopupMode("exam");
-                                        setExamName("");
-                                        setExamDate(formatDate(today));
-                                        setExamColor(examColors[0].value);
-                                        setIsEditingExam(true);
-                                    }}
-                                    style={{
-                                        width: "38px",
-                                        height: "38px",
-                                        borderRadius: "12px",
-                                        border: "none",
-                                        background: "#2563eb",
-                                        color: "white",
-                                        cursor: "pointer",
-                                        fontWeight: "bold",
-                                        fontSize: "22px",
-                                        lineHeight: "38px",
-                                    }}
-                                    title="Lägg till prov"
-                                >
-                                    +
-                                </button>
-                            </div>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateExamBoxMinimized(true);
+                                }}
+                                style={{
+                                    width: "38px",
+                                    height: "38px",
+                                    borderRadius: "12px",
+                                    border: "1px solid rgba(148, 163, 184, 0.3)",
+                                    background: "rgba(30, 41, 59, 0.85)",
+                                    color: "#e2e8f0",
+                                    cursor: "pointer",
+                                    fontWeight: "bold",
+                                    fontSize: "18px",
+                                    flexShrink: 0,
+                                }}
+                                title="Minimera provlistan"
+                            >
+                                −
+                            </button>
                         )}
                     </div>
 
-                    {!isExamBoxMinimized && (
-                        <div
-                            style={{
-                                marginTop: "14px",
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "10px",
-                            }}
-                        >
-                            {upcomingExams.length === 0 ? (
-                                <p style={{ color: "#94a3b8", margin: 0, fontSize: "14px" }}>
-                                    Inga prov inlagda ännu.
-                                </p>
-                            ) : (
-                                upcomingExams.map((exam) => (
-                                    <button
-                                        key={exam.id}
-                                        onClick={() => openExamPopup(exam)}
-                                        style={{
-                                            background: exam.color,
-                                            color: "#ffffff",
-                                            border: "1px solid rgba(255,255,255,0.22)",
-                                            borderRadius: "14px",
-                                            padding: "12px",
-                                            textAlign: "left",
-                                            cursor: "pointer",
-                                            boxShadow: "0 10px 22px rgba(0,0,0,0.3)",
-                                        }}
-                                    >
-                                        <div style={{ fontWeight: "800", fontSize: "15px" }}>
-                                            {exam.name} – {formatDaysUntilExam(exam.date)}
-                                        </div>
-                                        <div
-                                            style={{
-                                                opacity: 0.72,
-                                                marginTop: "4px",
-                                                fontSize: "13px",
-                                                fontWeight: "bold",
-                                            }}
-                                        >
-                                            {formatExamDate(exam.date)}
-                                        </div>
-                                    </button>
-                                ))
-                            )}
-                        </div>
-                    )}
                 </aside>
             </div>
 
