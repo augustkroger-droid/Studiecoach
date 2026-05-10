@@ -9,8 +9,9 @@ type Notification = {
     id: string;
     user_id: string;
     actor_id: string;
-    post_id: string;
-    type: "like" | "comment";
+    post_id: string | null;
+    assigned_study_template_id: string | null;
+    type: "like" | "comment" | "study_template";
     message: string;
     read: boolean;
     created_at: string;
@@ -72,6 +73,12 @@ export default function NotificationBell() {
             .eq("user_id", userId);
 
         setOpen(false);
+
+        if (notification.type === "study_template") {
+            router.push("/kalender?open=assigned-pass");
+            return;
+        }
+
         router.push(`/pepp?post=${notification.post_id}`);
     }
 
@@ -221,7 +228,11 @@ export default function NotificationBell() {
                                                 fontSize: "24px",
                                             }}
                                         >
-                                            {notification.type === "like" ? "❤️" : "💬"}
+                                            {notification.type === "like"
+                                                ? "❤️"
+                                                : notification.type === "comment"
+                                                    ? "💬"
+                                                    : "📚"}
                                         </div>
 
                                         <div style={{ minWidth: 0 }}>

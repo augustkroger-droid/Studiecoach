@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import NavBar from "@/components/NavBar";
 import { getSavedTheme, THEMES, ThemeKey } from "@/lib/themes";
 import ThemePicker from "@/components/ThemePicker";
+import { useSearchParams } from "next/navigation";
 
 const days = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"];
 
@@ -86,6 +87,8 @@ function getWeekNumber(date: Date) {
 }
 
 export default function KalenderPage() {
+    const searchParams = useSearchParams();
+    const shouldOpenAssignedPasses = searchParams.get("open") === "assigned-pass";
     const [themeKey, setThemeKey] = useState<ThemeKey>("ocean");
 
     useEffect(() => {
@@ -143,9 +146,14 @@ export default function KalenderPage() {
     }, [weekOffset]);
 
     useEffect(() => {
-        setIsAssignedBoxMinimized(
-            localStorage.getItem("calendarAssignedBoxMinimized") === "true"
-        );
+        if (shouldOpenAssignedPasses) {
+            setIsAssignedBoxMinimized(false);
+            localStorage.setItem("calendarAssignedBoxMinimized", "false");
+        } else {
+            setIsAssignedBoxMinimized(
+                localStorage.getItem("calendarAssignedBoxMinimized") === "true"
+            );
+        }
 
         setIsExamBoxMinimized(
             localStorage.getItem("calendarExamBoxMinimized") === "true"
@@ -154,7 +162,7 @@ export default function KalenderPage() {
         setIsGoalBoxMinimized(
             localStorage.getItem("calendarGoalBoxMinimized") === "true"
         );
-    }, []);
+    }, [shouldOpenAssignedPasses]);
 
     function getCurrentWeekStartString() {
         return formatDate(getStartOfWeek(0));

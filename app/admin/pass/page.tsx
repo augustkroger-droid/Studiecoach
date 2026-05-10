@@ -466,12 +466,32 @@ export default function AdminPassPage() {
             status: "available",
         }));
 
-        const { error } = await supabase
+        const { data: insertedPasses, error } = await supabase
             .from("assigned_study_templates")
-            .insert(rows);
+            .insert(rows)
+            .select("id, student_id");
 
         if (error) {
             alert(error.message);
+            return;
+        }
+
+        const notificationRows = (insertedPasses || []).map((pass) => ({
+            user_id: pass.student_id,
+            actor_id: templateToSend.admin_id,
+            post_id: null,
+            assigned_study_template_id: pass.id,
+            type: "study_template",
+            message: `Du har fått ett nytt studiepass: ${templateToSend.title}`,
+            read: false,
+        }));
+
+        const { error: notificationError } = await supabase
+            .from("notifications")
+            .insert(notificationRows);
+
+        if (notificationError) {
+            alert(notificationError.message);
             return;
         }
 
