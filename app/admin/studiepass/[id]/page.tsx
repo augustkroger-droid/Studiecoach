@@ -546,10 +546,10 @@ export default function AdminStudyTemplatePage() {
                 }}
             >
                 <button
-                    onClick={() => router.push("/admin")}
+                    onClick={() => router.push("/admin/pass")}
                     style={smallButton}
                 >
-                    ← Tillbaka till admin
+                    ← Tillbaka till förplanerade pass
                 </button>
 
                 <section
