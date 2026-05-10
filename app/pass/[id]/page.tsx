@@ -526,7 +526,6 @@ export default function PassPage() {
     }, [isStudyMode, router, pauseSession]);
 
     function openEndModal(actualMinutes: number) {
-        setIsRunning(false);
         completeSession(actualMinutes);
     }
 
@@ -576,15 +575,6 @@ export default function PassPage() {
             lastSavedSecondRef.current = secondsRef.current;
 
             setIsRunning(true);
-
-            await supabase
-                .from("study_sessions")
-                .update({
-                    status: "active",
-                    remaining_seconds: secondsRef.current,
-                    started_at: new Date().toISOString(),
-                })
-                .eq("id", id);
 
             setSessionStatus("active");
         }

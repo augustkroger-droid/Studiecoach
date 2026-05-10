@@ -111,26 +111,16 @@ export default function KalenderPage() {
 
     const [goalHours, setGoalHours] = useState("");
     const [weeklyGoalMinutes, setWeeklyGoalMinutes] = useState(0);
-    const [isGoalBoxMinimized, setIsGoalBoxMinimized] = useState(() => {
-        if (typeof window === "undefined") return false;
-
-        return localStorage.getItem("calendarGoalBoxMinimized") === "true";
-    });
+    const [isAssignedBoxMinimized, setIsAssignedBoxMinimized] = useState(false);
+    const [isExamBoxMinimized, setIsExamBoxMinimized] = useState(false);
+    const [isGoalBoxMinimized, setIsGoalBoxMinimized] = useState(false);
 
     const [examName, setExamName] = useState("");
     const [examDate, setExamDate] = useState("");
     const [examColor, setExamColor] = useState(examColors[0].value);
     const [isEditingExam, setIsEditingExam] = useState(false);
-    const [isExamBoxMinimized, setIsExamBoxMinimized] = useState(() => {
-        if (typeof window === "undefined") return false;
 
-        return localStorage.getItem("calendarExamBoxMinimized") === "true";
-    });
-    const [isAssignedBoxMinimized, setIsAssignedBoxMinimized] = useState(() => {
-        if (typeof window === "undefined") return false;
 
-        return localStorage.getItem("calendarAssignedBoxMinimized") === "true";
-    });
     const [expandedAssignedTemplateId, setExpandedAssignedTemplateId] = useState<string | null>(null);
 
     const [draggedSession, setDraggedSession] = useState<StudySession | null>(null);
@@ -151,6 +141,20 @@ export default function KalenderPage() {
         loadWeeklyGoal();
         loadAssignedTemplates();
     }, [weekOffset]);
+
+    useEffect(() => {
+        setIsAssignedBoxMinimized(
+            localStorage.getItem("calendarAssignedBoxMinimized") === "true"
+        );
+
+        setIsExamBoxMinimized(
+            localStorage.getItem("calendarExamBoxMinimized") === "true"
+        );
+
+        setIsGoalBoxMinimized(
+            localStorage.getItem("calendarGoalBoxMinimized") === "true"
+        );
+    }, []);
 
     function getCurrentWeekStartString() {
         return formatDate(getStartOfWeek(0));
