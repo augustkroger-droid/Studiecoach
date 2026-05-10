@@ -37,6 +37,12 @@ type Exam = {
   color: string;
 };
 
+type Announcement = {
+  id: string;
+  message: string;
+  created_at: string;
+};
+
 type FriendRequest = {
   from_user_id: string;
   to_user_id: string;
@@ -47,6 +53,7 @@ type UserProfile = {
   id: string;
   username: string;
   show_on_leaderboard?: boolean;
+  is_admin?: boolean;
 };
 
 function formatDate(date: Date) {
@@ -98,7 +105,10 @@ export default function Home() {
   const [posts, setPosts] = useState<StudyPost[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcementText, setAnnouncementText] = useState("");
 
   useEffect(() => {
     loadHome();
@@ -117,11 +127,14 @@ export default function Home() {
 
     const { data: profileData } = await supabase
       .from("profiles")
-      .select("username")
+      .select("id, username, show_on_leaderboard, is_admin")
       .eq("id", user.id)
       .single();
 
+    setMyProfile(profileData);
     setUsername(profileData?.username || "Elev");
+
+    const isAdmin = profileData?.is_admin ?? false;
 
     const today = formatDate(new Date());
 
@@ -165,27 +178,97 @@ export default function Home() {
 
     const visibleUserIds = [user.id, ...acceptedFriendIds];
 
-    const { data: postData } = await supabase
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const oneWeekAgoString = formatDate(oneWeekAgo);
+
+    let postQuery = supabase
       .from("study_posts")
       .select("*")
-      .in("user_id", visibleUserIds)
-      .order("created_at", { ascending: false })
-      .limit(4);
+      .gte("date", oneWeekAgoString)
+      .order("created_at", { ascending: false });
+
+    if (!isAdmin) {
+      postQuery = postQuery.in("user_id", visibleUserIds);
+    }
+
+    const { data: postData } = await postQuery;
 
     setPosts(postData || []);
 
-    const { data: profileList } = await supabase
+    let profileQuery = supabase
       .from("profiles")
-      .select("id, username, show_on_leaderboard")
-      .in("id", visibleUserIds);
+      .select("id, username, show_on_leaderboard, is_admin");
+
+    if (!isAdmin) {
+      profileQuery = profileQuery.in("id", visibleUserIds);
+    }
+
+    const { data: profileList } = await profileQuery;
 
     setProfiles(profileList || []);
+
+    const { data: announcementData } = await supabase
+      .from("announcements")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(3);
+
+    setAnnouncements(announcementData || []);
+
     setLoading(false);
   }
 
   async function logout() {
     await supabase.auth.signOut();
     window.location.href = "/login";
+  }
+
+  async function addAnnouncement() {
+    const message = announcementText.trim();
+
+    if (!message) return;
+
+    const { error } = await supabase
+      .from("announcements")
+      .insert({
+        message,
+      });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setAnnouncementText("");
+
+    const { data } = await supabase
+      .from("announcements")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(3);
+
+    setAnnouncements(data || []);
+  }
+
+  async function deleteAnnouncement(id: string) {
+    const confirmed = window.confirm("Ta bort uppdateringen?");
+
+    if (!confirmed) return;
+
+    const { error } = await supabase
+      .from("announcements")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setAnnouncements((current) =>
+      current.filter((announcement) => announcement.id !== id)
+    );
   }
 
   function getUsername(id: string) {
@@ -200,28 +283,20 @@ export default function Home() {
   const oneWeekAgo = new Date();
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
+  const postsLastWeek = posts.filter((post) => {
+    const postDate = new Date(post.date);
+    return postDate >= oneWeekAgo;
+  });
+
   const leaderboardMap: Record<string, number> = {};
 
-  posts
-    .filter((post) => new Date(post.date) >= oneWeekAgo)
-    .forEach((post) => {
-      const profile = profiles.find((profile) => profile.id === post.user_id);
-      const isMe = post.user_id === userId;
-      const isVisible = profile?.show_on_leaderboard ?? false;
-
-      if (isMe || isVisible) {
-        leaderboardMap[post.user_id] =
-          (leaderboardMap[post.user_id] || 0) + post.duration;
-      }
-    });
+  postsLastWeek.forEach((post) => {
+    leaderboardMap[post.user_id] =
+      (leaderboardMap[post.user_id] || 0) + post.duration;
+  });
 
   const leaderboard = Object.entries(leaderboardMap)
     .filter(([id]) => {
-      if (id === userId) {
-        const profile = profiles.find((profile) => profile.id === id);
-        return profile?.show_on_leaderboard ?? false;
-      }
-
       const profile = profiles.find((profile) => profile.id === id);
       return profile?.show_on_leaderboard ?? false;
     })
@@ -457,7 +532,7 @@ export default function Home() {
             <p style={{ color: "#94a3b8" }}>Inga postade studiepass ännu.</p>
           ) : (
             <div style={{ display: "grid", gap: "12px" }}>
-              {posts.map((post) => (
+              {posts.slice(0, 4).map((post) => (
                 <article key={post.id} style={miniPostStyle}>
                   <strong>{getUsername(post.user_id)}</strong>
 
@@ -494,26 +569,119 @@ export default function Home() {
             </div>
           )}
         </section>
+        <aside
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "20px",
+          }}
+        >
+          <section style={cardStyle(theme)}>
+            <h2 style={{ marginTop: 0 }}>🏆 Veckans topp 3</h2>
 
-        <section style={cardStyle(theme)}>
-          <h2 style={{ marginTop: 0 }}>🏆 Veckans topp 3</h2>
+            {leaderboard.length === 0 ? (
+              <p style={{ color: "#94a3b8" }}>
+                Ingen deltar i topplistan ännu.
+              </p>
+            ) : (
+              leaderboard.map(([id, minutes], index) => (
+                <div key={id} style={leaderboardRowStyle}>
+                  <strong>
+                    {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"}{" "}
+                    {getUsername(id)}
+                  </strong>
+                  <span>{formatTime(minutes)}</span>
+                </div>
+              ))
+            )}
+          </section>
+          <section style={cardStyle(theme)}>
+            <h2 style={{ marginTop: 0 }}>📢 Uppdateringar</h2>
 
-          {leaderboard.length === 0 ? (
-            <p style={{ color: "#94a3b8" }}>
-              Ingen deltar i topplistan ännu.
-            </p>
-          ) : (
-            leaderboard.map(([id, minutes], index) => (
-              <div key={id} style={leaderboardRowStyle}>
-                <strong>
-                  {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"}{" "}
-                  {getUsername(id)}
-                </strong>
-                <span>{formatTime(minutes)}</span>
+            {myProfile?.is_admin && (
+              <div style={{ display: "grid", gap: "10px", marginBottom: "16px" }}>
+                <textarea
+                  placeholder="Skriv en kort uppdatering..."
+                  value={announcementText}
+                  onChange={(e) => setAnnouncementText(e.target.value)}
+                  rows={3}
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    borderRadius: "12px",
+                    border: `1px solid ${theme.border}`,
+                    background: "rgba(2, 6, 23, 0.65)",
+                    color: theme.text,
+                    resize: "vertical",
+                    boxSizing: "border-box",
+                    fontFamily: "inherit",
+                  }}
+                />
+
+                <button
+                  onClick={addAnnouncement}
+                  style={{
+                    padding: "11px 14px",
+                    borderRadius: "12px",
+                    border: `1px solid ${theme.border}`,
+                    background: "rgba(255,255,255,0.14)",
+                    color: theme.text,
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }}
+                >
+                  Publicera
+                </button>
               </div>
-            ))
-          )}
-        </section>
+            )}
+
+            {announcements.length === 0 ? (
+              <p style={{ color: "#94a3b8" }}>Inga uppdateringar ännu.</p>
+            ) : (
+              <div style={{ display: "grid", gap: "10px" }}>
+                {announcements.map((announcement) => (
+                  <div
+                    key={announcement.id}
+                    style={{
+                      position: "relative",
+                      padding: myProfile?.is_admin ? "13px 42px 13px 13px" : "13px",
+                      borderRadius: "14px",
+                      background: "rgba(2, 6, 23, 0.55)",
+                      border: "1px solid rgba(148, 163, 184, 0.16)",
+                      color: "#cbd5e1",
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    {announcement.message}
+
+                    {myProfile?.is_admin && (
+                      <button
+                        onClick={() => deleteAnnouncement(announcement.id)}
+                        title="Ta bort uppdatering"
+                        style={{
+                          position: "absolute",
+                          top: "8px",
+                          right: "8px",
+                          width: "26px",
+                          height: "26px",
+                          borderRadius: "999px",
+                          border: "1px solid rgba(248, 113, 113, 0.45)",
+                          background: "rgba(239, 68, 68, 0.14)",
+                          color: "#fecaca",
+                          cursor: "pointer",
+                          fontWeight: "bold",
+                          lineHeight: 1,
+                        }}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </aside>
       </section>
     </main>
   );
