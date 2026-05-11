@@ -452,15 +452,6 @@ function PeppPageContent() {
 
         if (!text) return;
 
-        const existingComment = comments.find(
-            (comment) => comment.post_id === postId && comment.user_id === userId
-        );
-
-        if (existingComment) {
-            alert("Du har redan kommenterat detta inlägg.");
-            return;
-        }
-
         const { error } = await supabase
             .from("post_comments")
             .insert({
@@ -980,7 +971,7 @@ function PeppPageContent() {
                                                         ))
                                                     )}
 
-                                                    {!myComment && (
+                                                    {true && (
                                                         <div
                                                             className="pepp-comment-form"
                                                             style={{
@@ -990,7 +981,8 @@ function PeppPageContent() {
                                                             }}
                                                         >
                                                             <input
-                                                                placeholder="Skriv en kommentar..."
+                                                                placeholder="Skriv lite pepp..."
+                                                                maxLength={180}
                                                                 value={commentInputs[post.id] || ""}
                                                                 onChange={(e) =>
                                                                     setCommentInputs((current) => ({
@@ -1033,7 +1025,7 @@ function PeppPageContent() {
 
 
                         {leaderboard.length === 0 ? (
-                            <p style={{ color: "#94a3b8" }}>Ingen har postat pass senaste veckan.</p>
+                            <p style={{ color: "#94a3b8" }}>Ingen har postat pass denna vecka.</p>
                         ) : (
                             leaderboard.map(([id, minutes], index) => (
                                 <div key={id} style={leaderboardRowStyle}>
