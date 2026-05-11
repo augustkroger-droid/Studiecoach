@@ -37,6 +37,20 @@ export default function LoginPage() {
       return;
     }
 
+    const allowedDomains = [
+      "hoglandet.se",
+      "utb.hoglandet.se",
+    ];
+
+    const emailDomain = email.trim().split("@")[1]?.toLowerCase();
+
+    if (!emailDomain || !allowedDomains.includes(emailDomain)) {
+      alert("E-postadressen du angav är inte giltig på denna sida.");
+      return;
+    }
+
+    setLoading(true);
+
     setLoading(true);
 
     const { error } = await supabase.auth.signUp({

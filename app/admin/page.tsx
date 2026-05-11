@@ -340,6 +340,53 @@ export default function AdminPage() {
         loadAdminData();
     }
 
+    async function deleteUser(userId: string, username: string | null) {
+        if (!username) {
+            alert("Användaren saknar användarnamn och kan inte tas bort här.");
+            return;
+        }
+
+        const typedUsername = window.prompt(
+            `För att ta bort användaren permanent, skriv användarnamnet exakt:\n\n${username}`
+        );
+
+        if (typedUsername !== username) {
+            alert("Användarnamnet stämde inte. Användaren togs inte bort.");
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `Är du helt säker på att du vill ta bort ${username}? Detta går inte att ångra.`
+        );
+
+        if (!confirmed) return;
+
+        console.log("Försöker ta bort:", { userId, username });
+        const response = await fetch("/api/admin/delete-user", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ userId }),
+        });
+
+        const data = await response.json();
+
+        console.log("Delete response:", data);
+
+        if (!response.ok) {
+            console.error("Delete user error:", data);
+            alert(data.error || "Kunde inte ta bort användaren.");
+            return;
+        }
+
+        console.log("Delete user success:", data);
+
+        alert("Användaren togs bort.");
+        setSelectedUserId(null);
+        loadAdminData();
+    }
+
     async function saveAdminUsername() {
         if (!selectedProfile) return;
 
@@ -1010,6 +1057,29 @@ export default function AdminPage() {
                                             }}
                                         >
                                             {savingAdminUsername ? "Sparar..." : "Spara namn"}
+                                        </button>
+                                    </div>
+
+                                    <div
+                                        style={{
+                                            marginTop: "18px",
+                                            padding: "14px",
+                                            borderRadius: "16px",
+                                            background: "rgba(239, 68, 68, 0.10)",
+                                            border: "1px solid rgba(248, 113, 113, 0.45)",
+                                        }}
+                                    >
+                                        <strong style={{ color: "#fecaca" }}>Farlig zon</strong>
+
+                                        <p style={{ color: "#fecaca", marginTop: "8px", fontSize: "14px" }}>
+                                            Detta tar bort användaren permanent. Du måste skriva användarnamnet exakt innan borttagningen sker.
+                                        </p>
+
+                                        <button
+                                            onClick={() => deleteUser(selectedProfile.id, selectedProfile.username)}
+                                            style={dangerSmallButtonStyle}
+                                        >
+                                            Ta bort användare permanent
                                         </button>
                                     </div>
 
