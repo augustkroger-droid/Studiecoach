@@ -236,9 +236,15 @@ export default function KalenderPage() {
         const endOfWeek = new Date(startOfWeek);
         endOfWeek.setDate(startOfWeek.getDate() + 6);
 
+        const { data: userData } = await supabase.auth.getUser();
+        const user = userData.user;
+
+        if (!user) return;
+
         const { data, error } = await supabase
             .from("study_sessions")
             .select("*")
+            .eq("user_id", user.id)
             .gte("date", formatDate(startOfWeek))
             .lte("date", formatDate(endOfWeek))
             .order("date", { ascending: true })
@@ -266,7 +272,8 @@ export default function KalenderPage() {
                             duration: actualMinutes,
                             remaining_seconds: null,
                         })
-                        .eq("id", session.id);
+                        .eq("id", session.id)
+                        .eq("user_id", user.id);
 
                     return {
                         ...session,
@@ -284,7 +291,8 @@ export default function KalenderPage() {
                     await supabase
                         .from("study_sessions")
                         .update({ status: "missed" })
-                        .eq("id", session.id);
+                        .eq("id", session.id)
+                        .eq("user_id", user.id);
 
                     return {
                         ...session,

@@ -12,6 +12,14 @@ type Profile = {
     username: string;
     show_on_leaderboard?: boolean;
     is_admin?: boolean;
+    role?: "student" | "teacher" | "admin" | null;
+};
+
+type TeacherStudentAccess = {
+    id: string;
+    teacher_id: string;
+    student_id: string;
+    created_at: string;
 };
 
 type FriendRequest = {
@@ -125,6 +133,8 @@ function PeppPageContent() {
 
     const [loading, setLoading] = useState(true);
 
+    const [teacherStudentIds, setTeacherStudentIds] = useState<string[]>([]);
+
     useEffect(() => {
         loadEverything();
     }, []);
@@ -167,14 +177,15 @@ function PeppPageContent() {
 
         const { data: profileData } = await supabase
             .from("profiles")
-            .select("id, username, show_on_leaderboard, is_admin")
+            .select("id, username, show_on_leaderboard, is_admin, role")
             .eq("id", user.id)
             .single();
 
         setMyProfile(profileData);
         setShowOnLeaderboard(profileData?.show_on_leaderboard ?? false);
 
-        const isAdmin = profileData?.is_admin ?? false;
+        const isAdmin = profileData?.is_admin === true || profileData?.role === "admin";
+        const isTeacher = profileData?.role === "teacher" || isAdmin;
 
         const loadedFriendRequests = await loadFriendRequests(user.id);
 
@@ -186,7 +197,26 @@ function PeppPageContent() {
                     : request.from_user_id
             );
 
-        const allowedUserIds = isAdmin ? null : [user.id, ...acceptedIds];
+        let loadedTeacherStudentIds: string[] = [];
+
+        if (isTeacher && !isAdmin) {
+            const { data: teacherStudentData, error: teacherStudentError } = await supabase
+                .from("teacher_students")
+                .select("student_id")
+                .eq("teacher_id", user.id);
+
+            if (teacherStudentError) {
+                alert(teacherStudentError.message);
+            }
+
+            loadedTeacherStudentIds = (teacherStudentData || []).map(
+                (row: Pick<TeacherStudentAccess, "student_id">) => row.student_id
+            );
+        }
+
+        const allowedUserIds = isAdmin
+            ? null
+            : Array.from(new Set([user.id, ...acceptedIds, ...loadedTeacherStudentIds]));
 
         const loadedPosts = await loadPosts(allowedUserIds);
 
@@ -201,6 +231,10 @@ function PeppPageContent() {
 
         loadedPosts.forEach((post) => {
             profileIds.add(post.user_id);
+        }); 2
+
+        loadedTeacherStudentIds.forEach((studentId) => {
+            profileIds.add(studentId);
         });
 
         await Promise.all([
@@ -210,6 +244,7 @@ function PeppPageContent() {
             loadWeeklyGoal(user.id),
         ]);
 
+        setTeacherStudentIds(loadedTeacherStudentIds);
         setLoading(false);
     }
 
@@ -256,7 +291,7 @@ function PeppPageContent() {
     async function loadProfiles(isAdmin: boolean, userIds: string[]) {
         const profileQuery = supabase
             .from("profiles")
-            .select("id, username, show_on_leaderboard, is_admin");
+            .select("id, username, show_on_leaderboard, is_admin, role");
 
         const { data, error } = isAdmin
             ? await profileQuery
@@ -492,10 +527,6 @@ function PeppPageContent() {
             .delete()
             .eq("id", commentId);
 
-        if (!myProfile?.is_admin) {
-            query = query.eq("user_id", userId);
-        }
-
         const { error } = await query;
 
         if (error) {
@@ -565,16 +596,27 @@ function PeppPageContent() {
         const confirmed = window.confirm("Vill du ta bort detta inlägg?");
         if (!confirmed) return;
 
-        let query = supabase
+        const postToDelete = posts.find((post) => post.id === postId);
+
+        if (!postToDelete) {
+            alert("Kunde inte hitta inlägget.");
+            return;
+        }
+
+        const canDelete =
+            postToDelete.user_id === userId ||
+            myProfile?.is_admin ||
+            teacherStudentIds.includes(postToDelete.user_id);
+
+        if (!canDelete) {
+            alert("Du har inte behörighet att ta bort detta inlägg.");
+            return;
+        }
+
+        const { error } = await supabase
             .from("study_posts")
             .delete()
             .eq("id", postId);
-
-        if (!myProfile?.is_admin) {
-            query = query.eq("user_id", userId);
-        }
-
-        const { error } = await query;
 
         if (error) {
             alert(error.message);
@@ -685,28 +727,30 @@ function PeppPageContent() {
                                             transition: "box-shadow 0.3s ease, outline 0.3s ease",
                                         }}
                                     >
-                                        {(post.user_id === userId || myProfile?.is_admin) && (
-                                            <button
-                                                onClick={() => deletePost(post.id)}
-                                                style={{
-                                                    position: "absolute",
-                                                    top: "18px",
-                                                    right: "18px",
-                                                    width: "34px",
-                                                    height: "34px",
-                                                    borderRadius: "999px",
-                                                    border: "1px solid rgba(248, 113, 113, 0.45)",
-                                                    background: "rgba(239, 68, 68, 0.12)",
-                                                    color: "#fecaca",
-                                                    cursor: "pointer",
-                                                    fontWeight: "bold",
-                                                    fontSize: "18px",
-                                                }}
-                                                title="Ta bort inlägg"
-                                            >
-                                                ✕
-                                            </button>
-                                        )}
+                                        {(post.user_id === userId ||
+                                            myProfile?.is_admin ||
+                                            teacherStudentIds.includes(post.user_id)) && (
+                                                <button
+                                                    onClick={() => deletePost(post.id)}
+                                                    style={{
+                                                        position: "absolute",
+                                                        top: "18px",
+                                                        right: "18px",
+                                                        width: "34px",
+                                                        height: "34px",
+                                                        borderRadius: "999px",
+                                                        border: "1px solid rgba(248, 113, 113, 0.45)",
+                                                        background: "rgba(239, 68, 68, 0.12)",
+                                                        color: "#fecaca",
+                                                        cursor: "pointer",
+                                                        fontWeight: "bold",
+                                                        fontSize: "18px",
+                                                    }}
+                                                    title="Ta bort inlägg"
+                                                >
+                                                    ✕
+                                                </button>
+                                            )}
                                         <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
                                             <div>
                                                 <h3 style={{ margin: 0 }}>

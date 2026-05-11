@@ -210,11 +210,14 @@ export default function AdminStudyTemplatePage() {
 
         const { data: myProfile } = await supabase
             .from("profiles")
-            .select("is_admin")
+            .select("is_admin, role")
             .eq("id", user.id)
             .single();
 
-        if (!myProfile?.is_admin) {
+        const admin = myProfile?.is_admin === true || myProfile?.role === "admin";
+        const teacher = myProfile?.role === "teacher" || admin;
+
+        if (!teacher) {
             setAllowed(false);
             setLoading(false);
             return;
@@ -936,7 +939,7 @@ export default function AdminStudyTemplatePage() {
                                 </div>
                             )}
                         </div>
-                        
+
                     </aside>
                 </section>
             </div>

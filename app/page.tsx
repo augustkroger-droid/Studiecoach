@@ -54,6 +54,14 @@ type UserProfile = {
   username: string;
   show_on_leaderboard?: boolean;
   is_admin?: boolean;
+  role?: "student" | "teacher" | "admin" | null;
+};
+
+type TeacherStudentAccess = {
+  id: string;
+  teacher_id: string;
+  student_id: string;
+  created_at: string;
 };
 
 function formatDate(date: Date) {
@@ -127,14 +135,15 @@ export default function Home() {
 
     const { data: profileData } = await supabase
       .from("profiles")
-      .select("id, username, show_on_leaderboard, is_admin")
+      .select("id, username, show_on_leaderboard, is_admin, role")
       .eq("id", user.id)
       .single();
 
     setMyProfile(profileData);
     setUsername(profileData?.username || "Elev");
 
-    const isAdmin = profileData?.is_admin ?? false;
+    const isAdmin = profileData?.is_admin === true || profileData?.role === "admin";
+    const isTeacher = profileData?.role === "teacher" || isAdmin;
 
     const today = formatDate(new Date());
 
@@ -176,7 +185,26 @@ export default function Home() {
             : request.from_user_id
         ) || [];
 
-    const visibleUserIds = [user.id, ...acceptedFriendIds];
+    let teacherStudentIds: string[] = [];
+
+    if (isTeacher && !isAdmin) {
+      const { data: teacherStudentData, error: teacherStudentError } = await supabase
+        .from("teacher_students")
+        .select("student_id")
+        .eq("teacher_id", user.id);
+
+      if (teacherStudentError) {
+        alert(teacherStudentError.message);
+      }
+
+      teacherStudentIds = (teacherStudentData || []).map(
+        (row: Pick<TeacherStudentAccess, "student_id">) => row.student_id
+      );
+    }
+
+    const visibleUserIds = Array.from(
+      new Set([user.id, ...acceptedFriendIds, ...teacherStudentIds])
+    );
 
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);

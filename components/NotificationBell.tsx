@@ -48,8 +48,9 @@ export default function NotificationBell() {
     }, []);
 
     async function loadNotifications() {
-        const { data: userData } = await supabase.auth.getUser();
-        const user = userData.user;
+        const { data: sessionData } = await supabase.auth.getSession();
+
+        const user = sessionData.session?.user;
 
         if (!user) return;
 

@@ -11,6 +11,7 @@ type Profile = {
     username: string | null;
     username_locked?: boolean | null;
     is_admin?: boolean;
+    role?: "student" | "teacher" | "admin" | null;
     created_at?: string;
     show_on_leaderboard?: boolean;
     pepp_blocked_until?: string | null;
@@ -53,6 +54,20 @@ type AdminClassStudent = {
     created_at: string;
 };
 
+type TeacherClassAccess = {
+    id: string;
+    teacher_id: string;
+    class_id: string;
+    created_at: string;
+};
+
+type TeacherStudentAccess = {
+    id: string;
+    teacher_id: string;
+    student_id: string;
+    created_at: string;
+};
+
 const weekDays = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"];
 
 function formatHours(minutes: number) {
@@ -88,6 +103,8 @@ export default function AdminPage() {
 
     const [adminClasses, setAdminClasses] = useState<AdminClass[]>([]);
     const [classStudents, setClassStudents] = useState<AdminClassStudent[]>([]);
+    const [teacherClassAccess, setTeacherClassAccess] = useState<TeacherClassAccess[]>([]);
+    const [teacherStudentAccess, setTeacherStudentAccess] = useState<TeacherStudentAccess[]>([]);
     const [newClassName, setNewClassName] = useState("");
     const [openClassIds, setOpenClassIds] = useState<string[]>([]);
 
@@ -131,7 +148,7 @@ export default function AdminPage() {
         const { data: profileData, error: profileError } = await supabase
             .from("profiles")
             .select(
-                "id, username, username_locked, is_admin, created_at, show_on_leaderboard, pepp_blocked_until, pepp_block_reason"
+                "id, username, username_locked, is_admin, role, created_at, show_on_leaderboard, pepp_blocked_until, pepp_block_reason"
             )
             .order("username", { ascending: true });
 
@@ -173,6 +190,22 @@ export default function AdminPage() {
             alert(classStudentError.message);
         }
 
+        const { data: teacherClassAccessData, error: teacherClassAccessError } = await supabase
+            .from("teacher_classes")
+            .select("*");
+
+        if (teacherClassAccessError) {
+            alert(teacherClassAccessError.message);
+        }
+
+        const { data: teacherStudentAccessData, error: teacherStudentAccessError } = await supabase
+            .from("teacher_students")
+            .select("*");
+
+        if (teacherStudentAccessError) {
+            alert(teacherStudentAccessError.message);
+        }
+
         setProfiles(profileData || []);
 
         const sortedSessionData = ((sessionData || []) as StudySession[]).sort(
@@ -183,6 +216,8 @@ export default function AdminPage() {
         setPosts(postData || []);
         setAdminClasses(classData || []);
         setClassStudents(classStudentData || []);
+        setTeacherClassAccess(teacherClassAccessData || []);
+        setTeacherStudentAccess(teacherStudentAccessData || []);
         setSelectedUserId(profileData?.[0]?.id || null);
         setLoading(false);
     }
@@ -428,6 +463,214 @@ export default function AdminPage() {
         loadAdminData();
     }
 
+    async function giveTeacherClassAccess(teacherId: string, classId: string) {
+        const studentsInClass = classStudents.filter((row) => row.class_id === classId);
+        const adminClass = adminClasses.find((classItem) => classItem.id === classId);
+
+        const { error: classAccessError } = await supabase
+            .from("teacher_classes")
+            .upsert(
+                {
+                    teacher_id: teacherId,
+                    class_id: classId,
+                },
+                {
+                    onConflict: "teacher_id,class_id",
+                }
+            );
+
+        if (classAccessError) {
+            alert(classAccessError.message);
+            return;
+        }
+
+        if (studentsInClass.length > 0) {
+            const rowsToInsert = studentsInClass.map((row) => ({
+                teacher_id: teacherId,
+                student_id: row.student_id,
+            }));
+
+            const { error: studentAccessError } = await supabase
+                .from("teacher_students")
+                .upsert(rowsToInsert, {
+                    onConflict: "teacher_id,student_id",
+                });
+
+            if (studentAccessError) {
+                alert(studentAccessError.message);
+                return;
+            }
+        }
+
+        if (adminClass) {
+            const { data: existingTeacherClass } = await supabase
+                .from("teacher_own_classes")
+                .select("id")
+                .eq("teacher_id", teacherId)
+                .eq("source_admin_class_id", classId)
+                .maybeSingle();
+
+            let teacherOwnClassId = existingTeacherClass?.id;
+
+            if (!teacherOwnClassId) {
+                const { data: createdTeacherClass, error: createTeacherClassError } = await supabase
+                    .from("teacher_own_classes")
+                    .insert({
+                        teacher_id: teacherId,
+                        name: adminClass.name,
+                        source_admin_class_id: classId,
+                    })
+                    .select("id")
+                    .single();
+
+                if (createTeacherClassError) {
+                    alert(createTeacherClassError.message);
+                    return;
+                }
+
+                teacherOwnClassId = createdTeacherClass.id;
+            }
+
+            if (teacherOwnClassId && studentsInClass.length > 0) {
+                const teacherClassStudentRows = studentsInClass.map((row) => ({
+                    class_id: teacherOwnClassId,
+                    student_id: row.student_id,
+                }));
+
+                const { error: teacherClassStudentError } = await supabase
+                    .from("teacher_own_class_students")
+                    .upsert(teacherClassStudentRows, {
+                        onConflict: "class_id,student_id",
+                    });
+
+                if (teacherClassStudentError) {
+                    alert(teacherClassStudentError.message);
+                    return;
+                }
+            }
+        }
+
+        loadAdminData();
+    }
+
+    async function removeTeacherClassAccess(teacherId: string, classId: string) {
+        const confirmed = window.confirm(
+            "Ta bort lärarens åtkomst till denna klass och eleverna i klassen?"
+        );
+
+        if (!confirmed) return;
+
+        const studentsInClass = classStudents.filter((row) => row.class_id === classId);
+        const studentIds = studentsInClass.map((row) => row.student_id);
+
+        const { error: classError } = await supabase
+            .from("teacher_classes")
+            .delete()
+            .eq("teacher_id", teacherId)
+            .eq("class_id", classId);
+
+        if (classError) {
+            alert(classError.message);
+            return;
+        }
+
+        if (studentIds.length > 0) {
+            const { error: studentError } = await supabase
+                .from("teacher_students")
+                .delete()
+                .eq("teacher_id", teacherId)
+                .in("student_id", studentIds);
+
+            if (studentError) {
+                alert(studentError.message);
+                return;
+            }
+        }
+
+        loadAdminData();
+    }
+
+    async function giveTeacherStudentAccess(teacherId: string, studentId: string) {
+        const { error } = await supabase
+            .from("teacher_students")
+            .insert({
+                teacher_id: teacherId,
+                student_id: studentId,
+            });
+
+        if (error) {
+            if (error.code === "23505") {
+                alert("Läraren har redan tillgång till eleven.");
+                return;
+            }
+
+            alert(error.message);
+            return;
+        }
+
+        loadAdminData();
+    }
+
+    async function removeTeacherStudentAccess(teacherId: string, studentId: string) {
+        const { error } = await supabase
+            .from("teacher_students")
+            .delete()
+            .eq("teacher_id", teacherId)
+            .eq("student_id", studentId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        loadAdminData();
+    }
+
+    async function setUserRole(userId: string, role: "student" | "teacher" | "admin") {
+        const confirmed = window.confirm(`Ändra roll till ${role}?`);
+
+        if (!confirmed) return;
+
+        const { error } = await supabase
+            .from("profiles")
+            .update({
+                role,
+                is_admin: role === "admin",
+            })
+            .eq("id", userId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setProfiles((current) =>
+            current.map((profile) =>
+                profile.id === userId
+                    ? { ...profile, role, is_admin: role === "admin" }
+                    : profile
+            )
+        );
+    }
+
+    function getTeachers() {
+        return profiles
+            .filter((profile) => profile.role === "teacher" || profile.is_admin)
+            .sort((a, b) => (a.username || "").localeCompare(b.username || "", "sv"));
+    }
+
+    function teacherCanSeeClass(teacherId: string, classId: string) {
+        return teacherClassAccess.some(
+            (row) => row.teacher_id === teacherId && row.class_id === classId
+        );
+    }
+
+    function teacherCanSeeStudent(teacherId: string, studentId: string) {
+        return teacherStudentAccess.some(
+            (row) => row.teacher_id === teacherId && row.student_id === studentId
+        );
+    }
+
     const selectedProfile = profiles.find((profile) => profile.id === selectedUserId) || null;
 
     const sortedProfiles = [...profiles]
@@ -588,6 +831,22 @@ export default function AdminPage() {
 
                                         {openClassIds.includes(adminClass.id) && (
                                             <>
+                                                <div style={{ marginBottom: "14px" }}>
+                                                    <p style={{ margin: "0 0 6px", color: "#94a3b8", fontSize: "13px" }}>
+                                                        Lärare som kan se denna klass
+                                                    </p>
+
+                                                    <TeacherAccessPicker
+                                                        teachers={getTeachers()}
+                                                        selectedTeacherIds={teacherClassAccess
+                                                            .filter((row) => row.class_id === adminClass.id)
+                                                            .map((row) => row.teacher_id)}
+                                                        onAdd={(teacherId) => giveTeacherClassAccess(teacherId, adminClass.id)}
+                                                        onRemove={(teacherId) =>
+                                                            removeTeacherClassAccess(teacherId, adminClass.id)
+                                                        }
+                                                    />
+                                                </div>
                                                 {studentsInClass.length === 0 ? (
                                                     <p style={{ color: "#94a3b8", margin: 0 }}>
                                                         Inga elever i klassen ännu.
@@ -658,9 +917,25 @@ export default function AdminPage() {
                                     </div>
                                 </div>
 
-                                {profile.is_admin && <span>Admin</span>}
+                                <span>
+                                    {profile.role === "admin"
+                                        ? "Admin"
+                                        : profile.role === "teacher"
+                                            ? "Lärare"
+                                            : "Elev"}
+                                </span>
                             </button>
-
+                            <select
+                                value={profile.role || "student"}
+                                onChange={(event) =>
+                                    setUserRole(profile.id, event.target.value as "student" | "teacher" | "admin")
+                                }
+                                style={selectStyle}
+                            >
+                                <option value="student">Elev</option>
+                                <option value="teacher">Lärare</option>
+                                <option value="admin">Admin</option>
+                            </select>
                             <select
                                 defaultValue=""
                                 onChange={(event) => {
@@ -767,6 +1042,31 @@ export default function AdminPage() {
 
                                         Lås användarens möjlighet att byta namn
                                     </label>
+
+                                    <div
+                                        style={{
+                                            marginTop: "18px",
+                                            padding: "14px",
+                                            borderRadius: "16px",
+                                            background: "rgba(15, 23, 42, 0.65)",
+                                            border: "1px solid rgba(148, 163, 184, 0.22)",
+                                        }}
+                                    >
+                                        <strong>Lärare som kan se denna elev</strong>
+
+                                        <div style={{ marginTop: "12px" }}>
+                                            <TeacherAccessPicker
+                                                teachers={getTeachers()}
+                                                selectedTeacherIds={teacherStudentAccess
+                                                    .filter((row) => row.student_id === selectedProfile.id)
+                                                    .map((row) => row.teacher_id)}
+                                                onAdd={(teacherId) => giveTeacherStudentAccess(teacherId, selectedProfile.id)}
+                                                onRemove={(teacherId) =>
+                                                    removeTeacherStudentAccess(teacherId, selectedProfile.id)
+                                                }
+                                            />
+                                        </div>
+                                    </div>
 
                                     <div
                                         style={{
@@ -1037,6 +1337,72 @@ function PostCard({ post, username }: { post: StudyPost; username: string }) {
     );
 }
 
+function TeacherAccessPicker({
+    teachers,
+    selectedTeacherIds,
+    onAdd,
+    onRemove,
+}: {
+    teachers: Profile[];
+    selectedTeacherIds: string[];
+    onAdd: (teacherId: string) => void;
+    onRemove: (teacherId: string) => void;
+}) {
+    const availableTeachers = teachers.filter(
+        (teacher) => !selectedTeacherIds.includes(teacher.id)
+    );
+
+    const selectedTeachers = teachers.filter((teacher) =>
+        selectedTeacherIds.includes(teacher.id)
+    );
+
+    return (
+        <div>
+            <select
+                defaultValue=""
+                onChange={(event) => {
+                    if (!event.target.value) return;
+                    onAdd(event.target.value);
+                    event.currentTarget.value = "";
+                }}
+                style={selectStyle}
+            >
+                <option value="" disabled>
+                    Lägg till lärare...
+                </option>
+
+                {availableTeachers.map((teacher) => (
+                    <option key={teacher.id} value={teacher.id}>
+                        {teacher.username || "Lärare utan namn"}
+                    </option>
+                ))}
+            </select>
+
+            <div style={{ marginTop: "10px" }}>
+                {selectedTeachers.length === 0 ? (
+                    <p style={{ color: "#94a3b8", margin: 0 }}>
+                        Inga lärare valda.
+                    </p>
+                ) : (
+                    selectedTeachers.map((teacher) => (
+                        <span key={teacher.id} style={accessPillStyle}>
+                            {teacher.username || "Lärare utan namn"}
+
+                            <button
+                                onClick={() => onRemove(teacher.id)}
+                                style={pillRemoveButtonStyle}
+                                title="Ta bort åtkomst"
+                            >
+                                ×
+                            </button>
+                        </span>
+                    ))
+                )}
+            </div>
+        </div>
+    );
+}
+
 const pageStyle = (theme: typeof THEMES[ThemeKey]) => ({
     minHeight: "100vh",
     padding: "32px",
@@ -1188,4 +1554,37 @@ const classFolderButtonStyle = {
     textAlign: "left" as const,
     padding: 0,
     fontSize: "15px",
+};
+
+const smallToggleButtonStyle = {
+    padding: "7px 9px",
+    borderRadius: "999px",
+    fontWeight: "bold",
+    cursor: "pointer",
+    marginRight: "6px",
+    marginBottom: "6px",
+};
+
+const accessPillStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "7px 10px",
+    borderRadius: "999px",
+    background: "rgba(34, 197, 94, 0.16)",
+    border: "1px solid rgba(74, 222, 128, 0.45)",
+    color: "#bbf7d0",
+    fontWeight: "bold",
+    marginRight: "6px",
+    marginBottom: "6px",
+};
+
+const pillRemoveButtonStyle = {
+    border: "none",
+    background: "transparent",
+    color: "#bbf7d0",
+    fontWeight: "bold",
+    cursor: "pointer",
+    fontSize: "16px",
+    lineHeight: 1,
 };

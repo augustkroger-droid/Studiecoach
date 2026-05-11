@@ -47,6 +47,28 @@ type AdminTemplateFolder = {
     created_at: string;
 };
 
+type TeacherOwnClass = {
+    id: string;
+    teacher_id: string;
+    name: string;
+    source_admin_class_id?: string | null;
+    created_at: string;
+};
+
+type TeacherOwnClassStudent = {
+    id: string;
+    class_id: string;
+    student_id: string;
+    created_at: string;
+};
+
+type TeacherStudentAccess = {
+    id: string;
+    teacher_id: string;
+    student_id: string;
+    created_at: string;
+};
+
 export default function AdminPassPage() {
     const [themeKey, setThemeKey] = useState<ThemeKey>("ocean");
 
@@ -58,6 +80,8 @@ export default function AdminPassPage() {
 
     const [loading, setLoading] = useState(true);
     const [allowed, setAllowed] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [isTeacher, setIsTeacher] = useState(false);
 
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [adminClasses, setAdminClasses] = useState<AdminClass[]>([]);
@@ -97,11 +121,17 @@ export default function AdminPassPage() {
 
         const { data: myProfile } = await supabase
             .from("profiles")
-            .select("is_admin")
+            .select("is_admin, role")
             .eq("id", user.id)
             .single();
 
-        if (!myProfile?.is_admin) {
+        const admin = myProfile?.is_admin === true || myProfile?.role === "admin";
+        const teacher = myProfile?.role === "teacher" || admin;
+
+        setIsAdmin(admin);
+        setIsTeacher(teacher);
+
+        if (!teacher) {
             setAllowed(false);
             setLoading(false);
             return;
@@ -111,31 +141,94 @@ export default function AdminPassPage() {
 
         const currentAdminId = user.id;
 
-        const { data: profileData, error: profileError } = await supabase
-            .from("profiles")
-            .select("id, username, is_admin")
-            .order("username", { ascending: true });
+        let profileData: Profile[] = [];
+        let classData: AdminClass[] = [];
+        let classStudentData: AdminClassStudent[] = [];
 
-        if (profileError) {
-            alert(profileError.message);
-        }
+        if (admin) {
+            const { data, error } = await supabase
+                .from("profiles")
+                .select("id, username, is_admin")
+                .order("username", { ascending: true });
 
-        const { data: classData, error: classError } = await supabase
-            .from("admin_classes")
-            .select("*")
-            .eq("admin_id", currentAdminId)
-            .order("name", { ascending: true });
+            if (error) alert(error.message);
+            profileData = data || [];
 
-        if (classError) {
-            alert(classError.message);
-        }
+            const { data: adminClassData, error: classError } = await supabase
+                .from("admin_classes")
+                .select("*")
+                .eq("admin_id", currentAdminId)
+                .order("name", { ascending: true });
 
-        const { data: classStudentData, error: classStudentError } = await supabase
-            .from("admin_class_students")
-            .select("*");
+            if (classError) alert(classError.message);
+            classData = adminClassData || [];
 
-        if (classStudentError) {
-            alert(classStudentError.message);
+            const { data: adminClassStudentData, error: classStudentError } = await supabase
+                .from("admin_class_students")
+                .select("*");
+
+            if (classStudentError) alert(classStudentError.message);
+            classStudentData = adminClassStudentData || [];
+        } else {
+            const { data: teacherStudentData, error: teacherStudentError } = await supabase
+                .from("teacher_students")
+                .select("*")
+                .eq("teacher_id", user.id);
+
+            if (teacherStudentError) alert(teacherStudentError.message);
+
+            const studentIds = (teacherStudentData || []).map(
+                (row: TeacherStudentAccess) => row.student_id
+            );
+
+            if (studentIds.length > 0) {
+                const { data, error } = await supabase
+                    .from("profiles")
+                    .select("id, username, is_admin")
+                    .in("id", studentIds)
+                    .order("username", { ascending: true });
+
+                if (error) alert(error.message);
+                profileData = data || [];
+            }
+
+            const { data: teacherClassData, error: teacherClassError } = await supabase
+                .from("teacher_own_classes")
+                .select("*")
+                .eq("teacher_id", user.id)
+                .order("name", { ascending: true });
+
+            if (teacherClassError) alert(teacherClassError.message);
+
+            classData = (teacherClassData || []).map((classItem: TeacherOwnClass) => ({
+                id: classItem.id,
+                admin_id: classItem.teacher_id,
+                name: classItem.name,
+                created_at: classItem.created_at,
+            }));
+
+            const teacherClassIds = (teacherClassData || []).map(
+                (classItem: TeacherOwnClass) => classItem.id
+            );
+
+            if (teacherClassIds.length > 0) {
+                const { data: teacherClassStudentData, error: teacherClassStudentError } =
+                    await supabase
+                        .from("teacher_own_class_students")
+                        .select("*")
+                        .in("class_id", teacherClassIds);
+
+                if (teacherClassStudentError) alert(teacherClassStudentError.message);
+
+                classStudentData = (teacherClassStudentData || []).map(
+                    (row: TeacherOwnClassStudent) => ({
+                        id: row.id,
+                        class_id: row.class_id,
+                        student_id: row.student_id,
+                        created_at: row.created_at,
+                    })
+                );
+            }
         }
 
         const { data: templateData, error: templateError } = await supabase
@@ -525,7 +618,7 @@ export default function AdminPassPage() {
             <NavBar />
             <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
 
-            <h1>📚 Förplanerade pass</h1>
+            <h1>🗓️ Planera pass</h1>
             <p style={{ color: "#94a3b8" }}>
                 Skapa, organisera och skicka färdiga studiepass till elever.
             </p>
