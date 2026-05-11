@@ -186,6 +186,15 @@ export default function PassPage() {
     const [resourceUrl, setResourceUrl] = useState("");
     const [loadingLinkTitle, setLoadingLinkTitle] = useState(false);
     const [collapsedBlockIds, setCollapsedBlockIds] = useState<string[]>([]);
+    const BREAK_INTERVAL_SECONDS = 30 * 60;
+
+    const [activeStudySeconds, setActiveStudySeconds] = useState(0);
+    const [showBreakSuggestion, setShowBreakSuggestion] = useState(false);
+    const BREAK_SECONDS = 5 * 60;
+
+    const [showBreakModal, setShowBreakModal] = useState(false);
+    const [breakSecondsLeft, setBreakSecondsLeft] = useState(BREAK_SECONDS);
+    const [breakDone, setBreakDone] = useState(false);
 
     const canEditTime = isEditMode && !["active", "paused", "done"].includes(sessionStatus);
 
@@ -254,6 +263,24 @@ export default function PassPage() {
     }, [id, isRunning, router]);
 
     useEffect(() => {
+        if (!showBreakModal || breakDone) return;
+
+        const interval = setInterval(() => {
+            setBreakSecondsLeft((current) => {
+                if (current <= 1) {
+                    clearInterval(interval);
+                    setBreakDone(true);
+                    return 0;
+                }
+
+                return current - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [showBreakModal, breakDone]);
+
+    useEffect(() => {
         if (!isRunning || !id) return;
 
         if (!endTimeRef.current) {
@@ -265,6 +292,15 @@ export default function PassPage() {
 
             secondsRef.current = next;
             setSecondsLeft(next);
+            setActiveStudySeconds((current) => {
+                const updated = current + 1;
+
+                if (updated > 0 && updated % BREAK_INTERVAL_SECONDS === 0) {
+                    setShowBreakSuggestion(true);
+                }
+
+                return updated;
+            });
 
             if (
                 lastSavedSecondRef.current === null ||
@@ -437,6 +473,45 @@ export default function PassPage() {
         return Date.now() + adjustedRemaining * 1000;
     }
 
+    async function startSuggestedBreak() {
+        setShowBreakSuggestion(false);
+        setActiveStudySeconds(0);
+
+        await pauseSession(true);
+
+        setBreakSecondsLeft(BREAK_SECONDS);
+        setBreakDone(false);
+        setShowBreakModal(true);
+    }
+
+    async function finishSuggestedBreak() {
+        setShowBreakModal(false);
+        setBreakSecondsLeft(BREAK_SECONDS);
+        setBreakDone(false);
+
+        const remaining = secondsRef.current;
+
+        endTimeRef.current = Date.now() + remaining * 1000;
+        lastSavedSecondRef.current = remaining;
+
+        const { error } = await supabase
+            .from("study_sessions")
+            .update({
+                status: "active",
+                remaining_seconds: remaining,
+                started_at: new Date().toISOString(),
+            })
+            .eq("id", id);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setIsRunning(true);
+        setSessionStatus("active");
+    }
+
     function formatTime(seconds: number) {
         const min = Math.floor(seconds / 60);
         const sec = seconds % 60;
@@ -569,6 +644,8 @@ export default function PassPage() {
 
     async function togglePause() {
         if (isRunning) {
+            setShowBreakSuggestion(false);
+            setActiveStudySeconds(0);
             await pauseSession(true);
         } else {
             const remaining = secondsRef.current;
@@ -596,6 +673,8 @@ export default function PassPage() {
     }
 
     async function stopEarly() {
+        setShowBreakSuggestion(false);
+        setActiveStudySeconds(0);
         const remaining = getCurrentRemainingSeconds();
         const studiedSeconds = plannedMinutes * 60 - remaining;
         const actualMinutes = Math.max(1, Math.round(studiedSeconds / 60));
@@ -1142,6 +1221,72 @@ export default function PassPage() {
                         >
                             Avsluta tidigare
                         </button>
+                        {showBreakSuggestion && (
+                            <div
+                                style={{
+                                    marginTop: "12px",
+                                    padding: "12px",
+                                    borderRadius: "14px",
+                                    background: "rgba(59, 130, 246, 0.14)",
+                                    border: "1px solid rgba(96, 165, 250, 0.32)",
+                                    textAlign: "left",
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        fontSize: "13px",
+                                        fontWeight: 800,
+                                        color: "#bfdbfe",
+                                        marginBottom: "4px",
+                                    }}
+                                >
+                                    Pausförslag
+                                </div>
+
+                                <div
+                                    style={{
+                                        fontSize: "13px",
+                                        lineHeight: 1.45,
+                                        color: "#cbd5e1",
+                                    }}
+                                >
+                                    Du har fokuserat i ungefär 30 min. Ta gärna en 5 min paus innan du fortsätter.
+                                </div>
+
+                                <div
+                                    style={{
+                                        display: "grid",
+                                        gap: "8px",
+                                        marginTop: "10px",
+                                    }}
+                                >
+                                    <button
+                                        onClick={startSuggestedBreak}
+                                        style={{
+                                            ...smallButton,
+                                            background: "rgba(37, 99, 235, 0.85)",
+                                            border: "none",
+                                            color: "white",
+                                        }}
+                                        type="button"
+                                    >
+                                        Ta 5 min paus
+                                    </button>
+
+                                    <button
+                                        onClick={() => setShowBreakSuggestion(false)}
+                                        style={{
+                                            ...smallButton,
+                                            background: "rgba(255,255,255,0.04)",
+                                            color: "#cbd5e1",
+                                        }}
+                                        type="button"
+                                    >
+                                        Fortsätt
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                         <div
                             style={{
                                 marginTop: "12px",
@@ -1927,6 +2072,82 @@ export default function PassPage() {
                 }
             }
         `}</style>
+                </div>
+            )}
+
+            {showBreakModal && (
+                <div
+                    className="pass-modal-backdrop"
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        background: "rgba(2, 6, 23, 0.78)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 50,
+                        padding: "24px",
+                    }}
+                >
+                    <div
+                        className="pass-modal-card"
+                        style={{
+                            width: "420px",
+                            maxWidth: "calc(100vw - 48px)",
+                            background: "#0f172a",
+                            border: "1px solid rgba(148, 163, 184, 0.25)",
+                            borderRadius: "20px",
+                            boxShadow: "0 24px 80px rgba(0,0,0,0.5)",
+                            padding: "24px",
+                            textAlign: "center",
+                        }}
+                    >
+                        <div style={{ fontSize: "42px", marginBottom: "10px" }}>
+                            {breakDone ? "🚀" : "☕"}
+                        </div>
+
+                        <h2 style={{ margin: 0, color: "#f8fafc" }}>
+                            {breakDone ? "Redo att sätta igång igen?" : "Ta en kort paus"}
+                        </h2>
+
+                        <p style={{ color: "#cbd5e1", lineHeight: 1.6 }}>
+                            {breakDone
+                                ? "Pausen är klar. Fortsätt när du känner dig redo."
+                                : "Vila ögonen, sträck på dig eller hämta vatten."}
+                        </p>
+
+                        <div
+                            style={{
+                                fontSize: "52px",
+                                fontWeight: 900,
+                                color: "#f8fafc",
+                                margin: "18px 0",
+                                letterSpacing: "-1px",
+                            }}
+                        >
+                            {formatTime(breakSecondsLeft)}
+                        </div>
+
+                        <button
+                            onClick={finishSuggestedBreak}
+                            style={{
+                                width: "100%",
+                                padding: "12px",
+                                borderRadius: "12px",
+                                border: "none",
+                                background: breakDone
+                                    ? "linear-gradient(90deg,#16a34a,#22c55e)"
+                                    : "rgba(37, 99, 235, 0.9)",
+                                color: "white",
+                                fontWeight: "bold",
+                                cursor: "pointer",
+                                fontSize: "15px",
+                            }}
+                            type="button"
+                        >
+                            {breakDone ? "Fortsätt plugga" : "Fortsätt tidigare"}
+                        </button>
+                    </div>
                 </div>
             )}
 
