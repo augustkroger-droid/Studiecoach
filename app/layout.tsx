@@ -14,7 +14,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Studiecoach",
-  description: "En app som hjälper dig att plannera dina studier och plugga effektivt",
+  description:
+    "En app som hjälper dig att plannera dina studier och plugga effektivt",
 };
 
 export default function RootLayout({

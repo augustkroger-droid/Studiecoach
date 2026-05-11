@@ -204,6 +204,7 @@ export default function PassPage() {
     const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const lastSavedSecondRef = useRef<number | null>(null);
     const isLeavingPageRef = useRef(false);
+    const hasCompletedSessionRef = useRef(false);
 
     const allChecklist = useMemo(
         () => data.blocks.flatMap((block) => block.checklist),
@@ -553,6 +554,8 @@ export default function PassPage() {
 
     useEffect(() => {
         return () => {
+            if (hasCompletedSessionRef.current) return;
+
             if (isStudyMode && isRunning) {
                 pauseSession(false);
             }
@@ -607,12 +610,16 @@ export default function PassPage() {
     async function completeSession(actualMinutes: number) {
         if (!id) return;
 
+        hasCompletedSessionRef.current = true;
+        isLeavingPageRef.current = true;
+
         const nextData = data;
 
         setData(nextData);
         setIsRunning(false);
+        endTimeRef.current = null;
 
-        await supabase
+        const { error } = await supabase
             .from("study_sessions")
             .update({
                 planning_data: nextData,
@@ -623,6 +630,11 @@ export default function PassPage() {
                 started_at: null,
             })
             .eq("id", id);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
 
         setSessionStatus("done");
 
@@ -675,6 +687,7 @@ export default function PassPage() {
     async function stopEarly() {
         setShowBreakSuggestion(false);
         setActiveStudySeconds(0);
+
         const remaining = getCurrentRemainingSeconds();
         const studiedSeconds = plannedMinutes * 60 - remaining;
         const actualMinutes = Math.max(1, Math.round(studiedSeconds / 60));
@@ -683,16 +696,7 @@ export default function PassPage() {
         setSecondsLeft(remaining);
         endTimeRef.current = null;
 
-        await supabase
-            .from("study_sessions")
-            .update({
-                status: "paused",
-                remaining_seconds: secondsRef.current,
-                started_at: null,
-            })
-            .eq("id", id);
-
-        openEndModal(actualMinutes);
+        await completeSession(actualMinutes);
     }
 
     function updateGoal(goal: string) {

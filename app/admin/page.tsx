@@ -533,7 +533,6 @@ export default function AdminPage() {
 
             <section className="admin-layout" style={adminLayoutStyle}>
                 <section style={cardStyle}>
-                    <h2>Användare</h2>
 
                     <div
                         className="admin-create-class-row"
