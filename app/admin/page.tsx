@@ -1060,29 +1060,6 @@ export default function AdminPage() {
                                         </button>
                                     </div>
 
-                                    <div
-                                        style={{
-                                            marginTop: "18px",
-                                            padding: "14px",
-                                            borderRadius: "16px",
-                                            background: "rgba(239, 68, 68, 0.10)",
-                                            border: "1px solid rgba(248, 113, 113, 0.45)",
-                                        }}
-                                    >
-                                        <strong style={{ color: "#fecaca" }}>Farlig zon</strong>
-
-                                        <p style={{ color: "#fecaca", marginTop: "8px", fontSize: "14px" }}>
-                                            Detta tar bort användaren permanent. Du måste skriva användarnamnet exakt innan borttagningen sker.
-                                        </p>
-
-                                        <button
-                                            onClick={() => deleteUser(selectedProfile.id, selectedProfile.username)}
-                                            style={dangerSmallButtonStyle}
-                                        >
-                                            Ta bort användare permanent
-                                        </button>
-                                    </div>
-
                                     <label
                                         style={{
                                             display: "flex",
@@ -1112,6 +1089,10 @@ export default function AdminPage() {
 
                                         Lås användarens möjlighet att byta namn
                                     </label>
+
+
+
+
 
                                     <div
                                         style={{
@@ -1221,6 +1202,28 @@ export default function AdminPage() {
                                                 </>
                                             )}
                                         </div>
+                                    </div>
+                                    <div
+                                        style={{
+                                            marginTop: "18px",
+                                            padding: "14px",
+                                            borderRadius: "16px",
+                                            background: "rgba(239, 68, 68, 0.10)",
+                                            border: "1px solid rgba(248, 113, 113, 0.45)",
+                                        }}
+                                    >
+                                        <strong style={{ color: "#fecaca" }}>OBS!</strong>
+
+                                        <p style={{ color: "#fecaca", marginTop: "8px", fontSize: "14px" }}>
+                                            Detta tar bort användaren permanent. Du måste skriva användarnamnet exakt innan borttagningen sker.
+                                        </p>
+
+                                        <button
+                                            onClick={() => deleteUser(selectedProfile.id, selectedProfile.username)}
+                                            style={dangerSmallButtonStyle}
+                                        >
+                                            Ta bort användare permanent
+                                        </button>
                                     </div>
                                 </div>
                             </section>
