@@ -51,7 +51,6 @@ export default function LoginPage() {
 
     setLoading(true);
 
-    setLoading(true);
 
     const { error } = await supabase.auth.signUp({
       email,
@@ -64,13 +63,9 @@ export default function LoginPage() {
     });
 
     if (error) {
-      if (error.message.toLowerCase().includes("email not confirmed")) {
-        alert(
-          "Du måste verifiera din mejladress innan du kan logga in 📩"
-        );
-      } else {
-        alert(error.message);
-      }
+      alert(error.message);
+      setLoading(false);
+      return;
     }
 
     setLoading(false);
@@ -98,10 +93,24 @@ export default function LoginPage() {
     setLoading(false);
 
     if (error) {
-      alert(error.message);
-    } else {
-      router.push("/");
+      const message = error.message.toLowerCase();
+
+      if (
+        message.includes("email not confirmed") ||
+        message.includes("email_not_confirmed")
+      ) {
+        alert(
+          "Du måste verifiera din mejladress innan du kan logga in 📩\n\n" +
+          "Kolla din inkorg och klicka på länken i verifieringsmailet."
+        );
+      } else {
+        alert(error.message);
+      }
+
+      return;
     }
+
+    router.push("/");
   }
 
   return (
