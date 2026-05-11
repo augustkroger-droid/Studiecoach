@@ -1824,6 +1824,40 @@ export default function KalenderPage() {
                             </button>
                         )}
                     </div>
+                    {!isExamBoxMinimized && (
+                        <div style={{ display: "grid", gap: "10px", marginTop: "14px" }}>
+                            {upcomingExams.length === 0 ? (
+                                <p style={{ color: "#94a3b8", margin: 0, fontSize: "14px" }}>
+                                    Inga kommande prov.
+                                </p>
+                            ) : (
+                                upcomingExams.map((exam) => (
+                                    <div
+                                        key={exam.id}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            openExamPopup(exam);
+                                        }}
+                                        style={{
+                                            padding: "12px",
+                                            borderRadius: "14px",
+                                            background: exam.color,
+                                            color: "#ffffff",
+                                            fontWeight: "bold",
+                                            cursor: "pointer",
+                                            boxShadow: "0 8px 18px rgba(0,0,0,0.3)",
+                                            border: "1px solid rgba(255,255,255,0.2)",
+                                        }}
+                                    >
+                                        <div>{exam.name}</div>
+                                        <div style={{ fontSize: "12px", opacity: 0.85, marginTop: "4px" }}>
+                                            {formatExamDate(exam.date)} · {formatDaysUntilExam(exam.date)}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    )}
 
                 </aside>
             </div>
