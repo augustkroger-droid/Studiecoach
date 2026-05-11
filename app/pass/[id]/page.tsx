@@ -63,6 +63,8 @@ type PlanningData = {
 };
 
 const STORAGE_BUCKET = "study-session-files";
+const MAX_FILE_SIZE_MB = 5;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 const DEFAULT_BLOCKS: Omit<StudyBlock, "id" | "checklist" | "note">[] = [
     {
@@ -959,6 +961,12 @@ export default function PassPage() {
     async function uploadResource(event: ChangeEvent<HTMLInputElement>) {
         const file = event.target.files?.[0];
         if (!file || !id) return;
+
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+            alert(`Filen är för stor. Maxstorlek är ${MAX_FILE_SIZE_MB} MB.`);
+            event.target.value = "";
+            return;
+        }
 
         setUploading(true);
 
@@ -1860,7 +1868,10 @@ export default function PassPage() {
                                         }}
                                     >
                                         <strong>Ladda upp fil/bild</strong>
-
+                                        <p style={{ margin: 0, color: "#94a3b8", fontSize: "13px" }}>
+                                            Max {MAX_FILE_SIZE_MB} MB per fil.
+                                        </p>
+                                        
                                         <label
                                             style={{
                                                 ...smallButton,

@@ -64,13 +64,22 @@ export default function LoginPage() {
     });
 
     if (error) {
-      alert(error.message);
-      setLoading(false);
-      return;
+      if (error.message.toLowerCase().includes("email not confirmed")) {
+        alert(
+          "Du måste verifiera din mejladress innan du kan logga in 📩"
+        );
+      } else {
+        alert(error.message);
+      }
     }
 
     setLoading(false);
-    alert("Konto skapat!");
+
+    alert(
+      "Konto skapat! 🎉\n\n" +
+      "Vi har skickat ett verifieringsmail till din e-postadress.\n\n" +
+      "Du måste verifiera din mejl innan du kan logga in."
+    );
   }
 
   async function signIn() {
