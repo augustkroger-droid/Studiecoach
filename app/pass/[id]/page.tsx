@@ -571,11 +571,26 @@ export default function PassPage() {
         if (isRunning) {
             await pauseSession(true);
         } else {
-            endTimeRef.current = Date.now() + secondsRef.current * 1000;
-            lastSavedSecondRef.current = secondsRef.current;
+            const remaining = secondsRef.current;
+
+            endTimeRef.current = Date.now() + remaining * 1000;
+            lastSavedSecondRef.current = remaining;
+
+            const { error } = await supabase
+                .from("study_sessions")
+                .update({
+                    status: "active",
+                    remaining_seconds: remaining,
+                    started_at: new Date().toISOString(),
+                })
+                .eq("id", id);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
 
             setIsRunning(true);
-
             setSessionStatus("active");
         }
     }

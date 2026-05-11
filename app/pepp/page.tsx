@@ -609,17 +609,15 @@ function PeppPageContent() {
         (request) => request.status === "pending" && request.to_user_id === userId
     );
 
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const weekStart = toDateString(getStartOfWeek());
 
-    const postsLastWeek = posts.filter((post) => {
-        const postDate = new Date(post.date);
-        return postDate >= oneWeekAgo;
+    const postsThisWeek = posts.filter((post) => {
+        return post.date >= weekStart;
     });
 
     const leaderboardMap: Record<string, number> = {};
 
-    postsLastWeek.forEach((post) => {
+    postsThisWeek.forEach((post) => {
         leaderboardMap[post.user_id] =
             (leaderboardMap[post.user_id] || 0) + post.duration;
     });
@@ -642,7 +640,7 @@ function PeppPageContent() {
     const myLeaderboardMinutes =
         myLeaderboardIndex === -1 ? 0 : fullLeaderboard[myLeaderboardIndex][1];
 
-    const myWeekMinutes = postsLastWeek
+    const myWeekMinutes = postsThisWeek
         .filter((post) => post.user_id === userId)
         .reduce((sum, post) => sum + post.duration, 0);
 
