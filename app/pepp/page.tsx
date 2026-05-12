@@ -126,6 +126,7 @@ function PeppPageContent() {
     const [openCommentsPostId, setOpenCommentsPostId] = useState<string | null>(null);
     const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
     const [hoveredLikesPostId, setHoveredLikesPostId] = useState<string | null>(null);
+    const [hoveredReactionKey, setHoveredReactionKey] = useState<string | null>(null);
     const [highlightedPostId, setHighlightedPostId] = useState<string | null>(null);
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
@@ -891,10 +892,17 @@ function PeppPageContent() {
                                                     paddingTop: "58px",
                                                     marginTop: "-58px",
                                                 }}
-                                                onMouseEnter={() => setHoveredLikesPostId(post.id)}
+                                                onMouseEnter={(e) => {
+                                                    const target = e.target as HTMLElement;
+
+                                                    if (!target.closest("[data-reaction-pill]")) {
+                                                        setHoveredReactionKey(null);
+                                                        setHoveredLikesPostId(post.id);
+                                                    }
+                                                }}
                                                 onMouseLeave={() => setHoveredLikesPostId(null)}
                                             >
-                                                {hoveredLikesPostId === post.id && (
+                                                {hoveredLikesPostId === post.id && !hoveredReactionKey && (
                                                     <div
                                                         style={{
                                                             position: "absolute",
@@ -1007,21 +1015,75 @@ function PeppPageContent() {
                                                         {reactionCounts.map((item) => (
                                                             <div
                                                                 key={item.reaction}
+                                                                data-reaction-pill="true"
                                                                 style={{
-                                                                    display: "flex",
-                                                                    alignItems: "center",
-                                                                    gap: "5px",
-                                                                    padding: "5px 9px",
-                                                                    borderRadius: "999px",
-                                                                    background: "rgba(15, 23, 42, 0.62)",
-                                                                    border: "1px solid rgba(148, 163, 184, 0.14)",
-                                                                    color: "#cbd5e1",
-                                                                    fontSize: "13px",
-                                                                    fontWeight: "bold",
+                                                                    position: "relative",
+                                                                }}
+                                                                onMouseEnter={() => {
+                                                                    setHoveredLikesPostId(null);
+                                                                    setHoveredReactionKey(`${post.id}-${item.reaction}`);
+                                                                }}
+                                                                onMouseLeave={() => {
+                                                                    setHoveredReactionKey(null);
+                                                                    setHoveredLikesPostId(post.id);
                                                                 }}
                                                             >
-                                                                <span>{item.reaction}</span>
-                                                                <span>{item.count}</span>
+                                                                <div
+                                                                    style={{
+                                                                        display: "flex",
+                                                                        alignItems: "center",
+                                                                        gap: "5px",
+                                                                        padding: "5px 9px",
+                                                                        borderRadius: "999px",
+                                                                        background: "rgba(15, 23, 42, 0.62)",
+                                                                        border: "1px solid rgba(148, 163, 184, 0.14)",
+                                                                        color: "#cbd5e1",
+                                                                        fontSize: "13px",
+                                                                        fontWeight: "bold",
+                                                                        cursor: "default",
+                                                                    }}
+                                                                >
+                                                                    <span>{item.reaction}</span>
+                                                                    <span>{item.count}</span>
+                                                                </div>
+
+                                                                {hoveredReactionKey === `${post.id}-${item.reaction}` && (
+                                                                    <div
+                                                                        style={{
+                                                                            position: "absolute",
+                                                                            right: 0,
+                                                                            top: "34px",
+                                                                            minWidth: "170px",
+                                                                            padding: "10px",
+                                                                            borderRadius: "14px",
+                                                                            background: "rgba(15, 23, 42, 0.96)",
+                                                                            border: "1px solid rgba(148, 163, 184, 0.2)",
+                                                                            boxShadow: "0 16px 35px rgba(0,0,0,0.42)",
+                                                                            zIndex: 60,
+                                                                            display: "flex",
+                                                                            flexDirection: "column",
+                                                                            gap: "6px",
+                                                                        }}
+                                                                    >
+                                                                        {postReactions
+                                                                            .filter((like) => like.reaction === item.reaction)
+                                                                            .map((like) => (
+                                                                                <div
+                                                                                    key={like.id}
+                                                                                    style={{
+                                                                                        padding: "7px 8px",
+                                                                                        borderRadius: "10px",
+                                                                                        background: "rgba(30, 41, 59, 0.72)",
+                                                                                        color: "#e2e8f0",
+                                                                                        fontWeight: "bold",
+                                                                                        fontSize: "13px",
+                                                                                    }}
+                                                                                >
+                                                                                    {item.reaction} {getUsername(like.user_id)}
+                                                                                </div>
+                                                                            ))}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         ))}
                                                     </div>
