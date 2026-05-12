@@ -111,6 +111,13 @@ export default function AdminPage() {
     const [adminUsernameInput, setAdminUsernameInput] = useState("");
     const [savingAdminUsername, setSavingAdminUsername] = useState(false);
 
+    const [teacherAccessEditor, setTeacherAccessEditor] = useState<Profile | null>(null);
+    const [selectedTeacherClassIds, setSelectedTeacherClassIds] = useState<string[]>([]);
+    const [selectedTeacherStudentIds, setSelectedTeacherStudentIds] = useState<string[]>([]);
+    const [openTeacherAccessClassIds, setOpenTeacherAccessClassIds] = useState<string[]>([]);
+    const [teacherAccessOtherUsersOpen, setTeacherAccessOtherUsersOpen] = useState(false);
+    const [savingTeacherAccess, setSavingTeacherAccess] = useState(false);
+
     useEffect(() => {
         loadAdminData();
     }, []);
@@ -218,7 +225,16 @@ export default function AdminPage() {
         setClassStudents(classStudentData || []);
         setTeacherClassAccess(teacherClassAccessData || []);
         setTeacherStudentAccess(teacherStudentAccessData || []);
-        setSelectedUserId(profileData?.[0]?.id || null);
+        setSelectedUserId((currentSelectedUserId) => {
+            if (
+                currentSelectedUserId &&
+                (profileData || []).some((profile) => profile.id === currentSelectedUserId)
+            ) {
+                return currentSelectedUserId;
+            }
+
+            return profileData?.[0]?.id || null;
+        });
         setLoading(false);
     }
 
@@ -272,11 +288,47 @@ export default function AdminPage() {
         loadAdminData();
     }
 
-    async function addStudentToClass(studentId: string, classId: string) {
-        if (!classId) return;
+    async function moveUserToClass(studentId: string, classId: string) {
+        if (classId === "none") {
+            const existingRow = classStudents.find((row) => row.student_id === studentId);
 
-        if (isStudentInAnyClass(studentId)) {
-            alert("Eleven ligger redan i en klass. Ta bort eleven från den klassen först.");
+            if (!existingRow) return;
+
+            const { error } = await supabase
+                .from("admin_class_students")
+                .delete()
+                .eq("id", existingRow.id);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            loadAdminData();
+            return;
+        }
+
+        const existingRow = classStudents.find((row) => row.student_id === studentId);
+
+        if (existingRow?.class_id === classId) {
+            alert("Användaren ligger redan i den mappen.");
+            return;
+        }
+
+        if (existingRow) {
+            const { error } = await supabase
+                .from("admin_class_students")
+                .update({
+                    class_id: classId,
+                })
+                .eq("id", existingRow.id);
+
+            if (error) {
+                alert(error.message);
+                return;
+            }
+
+            loadAdminData();
             return;
         }
 
@@ -288,11 +340,6 @@ export default function AdminPage() {
             });
 
         if (error) {
-            if (error.code === "23505") {
-                alert("Eleven finns redan i den klassen.");
-                return;
-            }
-
             alert(error.message);
             return;
         }
@@ -510,166 +557,218 @@ export default function AdminPage() {
         loadAdminData();
     }
 
-    async function giveTeacherClassAccess(teacherId: string, classId: string) {
-        const studentsInClass = classStudents.filter((row) => row.class_id === classId);
-        const adminClass = adminClasses.find((classItem) => classItem.id === classId);
+    function openTeacherAccessEditor(teacher: Profile) {
+        setTeacherAccessEditor(teacher);
 
-        const { error: classAccessError } = await supabase
-            .from("teacher_classes")
-            .upsert(
-                {
-                    teacher_id: teacherId,
-                    class_id: classId,
-                },
-                {
-                    onConflict: "teacher_id,class_id",
-                }
-            );
-
-        if (classAccessError) {
-            alert(classAccessError.message);
-            return;
-        }
-
-        if (studentsInClass.length > 0) {
-            const rowsToInsert = studentsInClass.map((row) => ({
-                teacher_id: teacherId,
-                student_id: row.student_id,
-            }));
-
-            const { error: studentAccessError } = await supabase
-                .from("teacher_students")
-                .upsert(rowsToInsert, {
-                    onConflict: "teacher_id,student_id",
-                });
-
-            if (studentAccessError) {
-                alert(studentAccessError.message);
-                return;
-            }
-        }
-
-        if (adminClass) {
-            const { data: existingTeacherClass } = await supabase
-                .from("teacher_own_classes")
-                .select("id")
-                .eq("teacher_id", teacherId)
-                .eq("source_admin_class_id", classId)
-                .maybeSingle();
-
-            let teacherOwnClassId = existingTeacherClass?.id;
-
-            if (!teacherOwnClassId) {
-                const { data: createdTeacherClass, error: createTeacherClassError } = await supabase
-                    .from("teacher_own_classes")
-                    .insert({
-                        teacher_id: teacherId,
-                        name: adminClass.name,
-                        source_admin_class_id: classId,
-                    })
-                    .select("id")
-                    .single();
-
-                if (createTeacherClassError) {
-                    alert(createTeacherClassError.message);
-                    return;
-                }
-
-                teacherOwnClassId = createdTeacherClass.id;
-            }
-
-            if (teacherOwnClassId && studentsInClass.length > 0) {
-                const teacherClassStudentRows = studentsInClass.map((row) => ({
-                    class_id: teacherOwnClassId,
-                    student_id: row.student_id,
-                }));
-
-                const { error: teacherClassStudentError } = await supabase
-                    .from("teacher_own_class_students")
-                    .upsert(teacherClassStudentRows, {
-                        onConflict: "class_id,student_id",
-                    });
-
-                if (teacherClassStudentError) {
-                    alert(teacherClassStudentError.message);
-                    return;
-                }
-            }
-        }
-
-        loadAdminData();
-    }
-
-    async function removeTeacherClassAccess(teacherId: string, classId: string) {
-        const confirmed = window.confirm(
-            "Ta bort lärarens åtkomst till denna klass och eleverna i klassen?"
+        setSelectedTeacherClassIds(
+            teacherClassAccess
+                .filter((row) => row.teacher_id === teacher.id)
+                .map((row) => row.class_id)
         );
 
-        if (!confirmed) return;
+        setSelectedTeacherStudentIds(
+            teacherStudentAccess
+                .filter((row) => row.teacher_id === teacher.id)
+                .map((row) => row.student_id)
+        );
 
-        const studentsInClass = classStudents.filter((row) => row.class_id === classId);
-        const studentIds = studentsInClass.map((row) => row.student_id);
+        setOpenTeacherAccessClassIds([]);
+        setTeacherAccessOtherUsersOpen(false);
+    }
 
-        const { error: classError } = await supabase
+    function closeTeacherAccessEditor() {
+        setTeacherAccessEditor(null);
+        setSelectedTeacherClassIds([]);
+        setSelectedTeacherStudentIds([]);
+        setOpenTeacherAccessClassIds([]);
+        setTeacherAccessOtherUsersOpen(false);
+    }
+
+    function toggleTeacherAccessClassOpen(classId: string) {
+        setOpenTeacherAccessClassIds((current) =>
+            current.includes(classId)
+                ? current.filter((id) => id !== classId)
+                : [...current, classId]
+        );
+    }
+
+    function toggleTeacherClassFolder(classId: string) {
+        setSelectedTeacherClassIds((current) =>
+            current.includes(classId)
+                ? current.filter((id) => id !== classId)
+                : [...current, classId]
+        );
+    }
+
+    function toggleTeacherStudent(studentId: string) {
+        setSelectedTeacherStudentIds((current) =>
+            current.includes(studentId)
+                ? current.filter((id) => id !== studentId)
+                : [...current, studentId]
+        );
+    }
+
+    function toggleAllTeacherStudentsInClass(studentIds: string[]) {
+        const allSelected =
+            studentIds.length > 0 &&
+            studentIds.every((studentId) => selectedTeacherStudentIds.includes(studentId));
+
+        setSelectedTeacherStudentIds((current) => {
+            if (allSelected) {
+                return current.filter((studentId) => !studentIds.includes(studentId));
+            }
+
+            return Array.from(new Set([...current, ...studentIds]));
+        });
+    }
+
+    async function saveTeacherAccessEditor() {
+        if (!teacherAccessEditor) return;
+
+        setSavingTeacherAccess(true);
+
+        const teacherId = teacherAccessEditor.id;
+
+        const { error: deleteTeacherClassesError } = await supabase
             .from("teacher_classes")
             .delete()
-            .eq("teacher_id", teacherId)
-            .eq("class_id", classId);
+            .eq("teacher_id", teacherId);
 
-        if (classError) {
-            alert(classError.message);
+        if (deleteTeacherClassesError) {
+            setSavingTeacherAccess(false);
+            alert(deleteTeacherClassesError.message);
             return;
         }
 
-        if (studentIds.length > 0) {
-            const { error: studentError } = await supabase
-                .from("teacher_students")
-                .delete()
-                .eq("teacher_id", teacherId)
-                .in("student_id", studentIds);
-
-            if (studentError) {
-                alert(studentError.message);
-                return;
-            }
-        }
-
-        loadAdminData();
-    }
-
-    async function giveTeacherStudentAccess(teacherId: string, studentId: string) {
-        const { error } = await supabase
-            .from("teacher_students")
-            .insert({
-                teacher_id: teacherId,
-                student_id: studentId,
-            });
-
-        if (error) {
-            if (error.code === "23505") {
-                alert("Läraren har redan tillgång till eleven.");
-                return;
-            }
-
-            alert(error.message);
-            return;
-        }
-
-        loadAdminData();
-    }
-
-    async function removeTeacherStudentAccess(teacherId: string, studentId: string) {
-        const { error } = await supabase
+        const { error: deleteTeacherStudentsError } = await supabase
             .from("teacher_students")
             .delete()
-            .eq("teacher_id", teacherId)
-            .eq("student_id", studentId);
+            .eq("teacher_id", teacherId);
 
-        if (error) {
-            alert(error.message);
+        if (deleteTeacherStudentsError) {
+            setSavingTeacherAccess(false);
+            alert(deleteTeacherStudentsError.message);
             return;
         }
 
+        const { data: oldTeacherOwnClasses, error: oldOwnClassesError } = await supabase
+            .from("teacher_own_classes")
+            .select("id, source_admin_class_id")
+            .eq("teacher_id", teacherId)
+            .not("source_admin_class_id", "is", null);
+
+        if (oldOwnClassesError) {
+            setSavingTeacherAccess(false);
+            alert(oldOwnClassesError.message);
+            return;
+        }
+
+        const oldSyncedTeacherOwnClassIds = (oldTeacherOwnClasses || []).map((row) => row.id);
+
+        if (oldSyncedTeacherOwnClassIds.length > 0) {
+            const { error: deleteOldClassStudentsError } = await supabase
+                .from("teacher_own_class_students")
+                .delete()
+                .in("class_id", oldSyncedTeacherOwnClassIds);
+
+            if (deleteOldClassStudentsError) {
+                setSavingTeacherAccess(false);
+                alert(deleteOldClassStudentsError.message);
+                return;
+            }
+
+            const { error: deleteOldClassesError } = await supabase
+                .from("teacher_own_classes")
+                .delete()
+                .in("id", oldSyncedTeacherOwnClassIds);
+
+            if (deleteOldClassesError) {
+                setSavingTeacherAccess(false);
+                alert(deleteOldClassesError.message);
+                return;
+            }
+        }
+
+        if (selectedTeacherClassIds.length > 0) {
+            const teacherClassRows = selectedTeacherClassIds.map((classId) => ({
+                teacher_id: teacherId,
+                class_id: classId,
+            }));
+
+            const { error } = await supabase
+                .from("teacher_classes")
+                .insert(teacherClassRows);
+
+            if (error) {
+                setSavingTeacherAccess(false);
+                alert(error.message);
+                return;
+            }
+        }
+
+        if (selectedTeacherStudentIds.length > 0) {
+            const teacherStudentRows = selectedTeacherStudentIds.map((studentId) => ({
+                teacher_id: teacherId,
+                student_id: studentId,
+            }));
+
+            const { error } = await supabase
+                .from("teacher_students")
+                .insert(teacherStudentRows);
+
+            if (error) {
+                setSavingTeacherAccess(false);
+                alert(error.message);
+                return;
+            }
+        }
+
+        for (const adminClassId of selectedTeacherClassIds) {
+            const adminClass = adminClasses.find((classItem) => classItem.id === adminClassId);
+
+            if (!adminClass) continue;
+
+            const { data: createdTeacherClass, error: createTeacherClassError } = await supabase
+                .from("teacher_own_classes")
+                .insert({
+                    teacher_id: teacherId,
+                    name: adminClass.name,
+                    source_admin_class_id: adminClass.id,
+                })
+                .select("id")
+                .single();
+
+            if (createTeacherClassError) {
+                setSavingTeacherAccess(false);
+                alert(createTeacherClassError.message);
+                return;
+            }
+
+            const studentIdsInAdminClass = classStudents
+                .filter((row) => row.class_id === adminClass.id)
+                .map((row) => row.student_id)
+                .filter((studentId) => selectedTeacherStudentIds.includes(studentId));
+
+            if (studentIdsInAdminClass.length > 0) {
+                const teacherOwnClassStudentRows = studentIdsInAdminClass.map((studentId) => ({
+                    class_id: createdTeacherClass.id,
+                    student_id: studentId,
+                }));
+
+                const { error: classStudentError } = await supabase
+                    .from("teacher_own_class_students")
+                    .insert(teacherOwnClassStudentRows);
+
+                if (classStudentError) {
+                    setSavingTeacherAccess(false);
+                    alert(classStudentError.message);
+                    return;
+                }
+            }
+        }
+
+        setSavingTeacherAccess(false);
+        closeTeacherAccessEditor();
         loadAdminData();
     }
 
@@ -831,18 +930,18 @@ export default function AdminPage() {
                         <input
                             value={newClassName}
                             onChange={(event) => setNewClassName(event.target.value)}
-                            placeholder="Ny klass, t.ex. 8A"
+                            placeholder="Ny mapp, t.ex. 8A"
                             style={inputStyle}
                         />
 
                         <button onClick={createClass} style={primaryButtonStyle}>
-                            Skapa klass
+                            Skapa mapp
                         </button>
                     </div>
 
                     {adminClasses.length > 0 && (
                         <div style={{ marginBottom: "20px" }}>
-                            <h3 style={{ marginBottom: "10px" }}>Klasser</h3>
+                            <h3 style={{ marginBottom: "10px" }}>Mappar</h3>
 
                             {adminClasses.map((adminClass) => {
                                 const studentsInClass = classStudents.filter(
@@ -878,22 +977,6 @@ export default function AdminPage() {
 
                                         {openClassIds.includes(adminClass.id) && (
                                             <>
-                                                <div style={{ marginBottom: "14px" }}>
-                                                    <p style={{ margin: "0 0 6px", color: "#94a3b8", fontSize: "13px" }}>
-                                                        Lärare som kan se denna klass
-                                                    </p>
-
-                                                    <TeacherAccessPicker
-                                                        teachers={getTeachers()}
-                                                        selectedTeacherIds={teacherClassAccess
-                                                            .filter((row) => row.class_id === adminClass.id)
-                                                            .map((row) => row.teacher_id)}
-                                                        onAdd={(teacherId) => giveTeacherClassAccess(teacherId, adminClass.id)}
-                                                        onRemove={(teacherId) =>
-                                                            removeTeacherClassAccess(teacherId, adminClass.id)
-                                                        }
-                                                    />
-                                                </div>
                                                 {studentsInClass.length === 0 ? (
                                                     <p style={{ color: "#94a3b8", margin: 0 }}>
                                                         Inga elever i klassen ännu.
@@ -972,35 +1055,6 @@ export default function AdminPage() {
                                             : "Elev"}
                                 </span>
                             </button>
-                            <select
-                                value={profile.role || "student"}
-                                onChange={(event) =>
-                                    setUserRole(profile.id, event.target.value as "student" | "teacher" | "admin")
-                                }
-                                style={selectStyle}
-                            >
-                                <option value="student">Elev</option>
-                                <option value="teacher">Lärare</option>
-                                <option value="admin">Admin</option>
-                            </select>
-                            <select
-                                defaultValue=""
-                                onChange={(event) => {
-                                    addStudentToClass(profile.id, event.target.value);
-                                    event.currentTarget.value = "";
-                                }}
-                                style={selectStyle}
-                            >
-                                <option value="" disabled>
-                                    Lägg i klass...
-                                </option>
-
-                                {adminClasses.map((adminClass) => (
-                                    <option key={adminClass.id} value={adminClass.id}>
-                                        {adminClass.name}
-                                    </option>
-                                ))}
-                            </select>
                         </div>
                     ))}
                 </section>
@@ -1060,6 +1114,64 @@ export default function AdminPage() {
                                         </button>
                                     </div>
 
+                                    <div
+                                        style={{
+                                            marginTop: "18px",
+                                            padding: "14px",
+                                            borderRadius: "16px",
+                                            background: "rgba(15, 23, 42, 0.65)",
+                                            border: "1px solid rgba(148, 163, 184, 0.22)",
+                                        }}
+                                    >
+                                        <strong>Roll och mapp</strong>
+
+                                        <select
+                                            value={selectedProfile.role || "student"}
+                                            onChange={(event) =>
+                                                setUserRole(
+                                                    selectedProfile.id,
+                                                    event.target.value as "student" | "teacher" | "admin"
+                                                )
+                                            }
+                                            style={selectStyle}
+                                        >
+                                            <option value="student">Elev</option>
+                                            <option value="teacher">Lärare</option>
+                                            <option value="admin">Admin</option>
+                                        </select>
+
+                                        <select
+                                            value={
+                                                classStudents.find((row) => row.student_id === selectedProfile.id)?.class_id || "none"
+                                            }
+                                            onChange={(event) => {
+                                                moveUserToClass(selectedProfile.id, event.target.value);
+                                            }}
+                                            style={selectStyle}
+                                        >
+                                            <option value="none">Ingen mapp</option>
+
+                                            {adminClasses.map((adminClass) => (
+                                                <option key={adminClass.id} value={adminClass.id}>
+                                                    {adminClass.name}
+                                                </option>
+                                            ))}
+                                        </select>
+
+                                        {selectedProfile.role === "teacher" || selectedProfile.is_admin ? (
+                                            <button
+                                                onClick={() => openTeacherAccessEditor(selectedProfile)}
+                                                style={{
+                                                    ...primaryButtonStyle,
+                                                    width: "100%",
+                                                    marginTop: "10px",
+                                                }}
+                                            >
+                                                Hantera elevåtkomst
+                                            </button>
+                                        ) : null}
+                                    </div>
+
                                     <label
                                         style={{
                                             display: "flex",
@@ -1090,34 +1202,17 @@ export default function AdminPage() {
                                         Lås användarens möjlighet att byta namn
                                     </label>
 
-
-
-
-
-                                    <div
-                                        style={{
-                                            marginTop: "18px",
-                                            padding: "14px",
-                                            borderRadius: "16px",
-                                            background: "rgba(15, 23, 42, 0.65)",
-                                            border: "1px solid rgba(148, 163, 184, 0.22)",
-                                        }}
-                                    >
-                                        <strong>Lärare som kan se denna elev</strong>
-
-                                        <div style={{ marginTop: "12px" }}>
-                                            <TeacherAccessPicker
-                                                teachers={getTeachers()}
-                                                selectedTeacherIds={teacherStudentAccess
-                                                    .filter((row) => row.student_id === selectedProfile.id)
-                                                    .map((row) => row.teacher_id)}
-                                                onAdd={(teacherId) => giveTeacherStudentAccess(teacherId, selectedProfile.id)}
-                                                onRemove={(teacherId) =>
-                                                    removeTeacherStudentAccess(teacherId, selectedProfile.id)
-                                                }
-                                            />
-                                        </div>
-                                    </div>
+                                    {selectedProfile.role === "teacher" || selectedProfile.is_admin ? (
+                                        <button
+                                            onClick={() => openTeacherAccessEditor(selectedProfile)}
+                                            style={{
+                                                ...primaryButtonStyle,
+                                                marginTop: "18px",
+                                            }}
+                                        >
+                                            Hantera elevåtkomst
+                                        </button>
+                                    ) : null}
 
                                     <div
                                         style={{
@@ -1331,7 +1426,59 @@ export default function AdminPage() {
                     ))
                 )}
             </section>
+            {teacherAccessEditor && (
+                <TeacherAccessEditorModal
+                    teacher={teacherAccessEditor}
+                    adminClasses={adminClasses}
+                    classStudents={classStudents}
+                    profiles={profiles}
+                    selectedClassIds={selectedTeacherClassIds}
+                    selectedStudentIds={selectedTeacherStudentIds}
+                    openClassIds={openTeacherAccessClassIds}
+                    otherUsersOpen={teacherAccessOtherUsersOpen}
+                    saving={savingTeacherAccess}
+                    closeModal={closeTeacherAccessEditor}
+                    toggleClassOpen={toggleTeacherAccessClassOpen}
+                    toggleClassFolder={toggleTeacherClassFolder}
+                    toggleStudent={toggleTeacherStudent}
+                    toggleAllStudentsInClass={toggleAllTeacherStudentsInClass}
+                    setOtherUsersOpen={setTeacherAccessOtherUsersOpen}
+                    saveTeacherAccess={saveTeacherAccessEditor}
+                    isStudentInAnyClass={isStudentInAnyClass}
+                />
+            )}
         </main>
+    );
+}
+
+function StudentCheckbox({
+    checked,
+    label,
+    onChange,
+}: {
+    checked: boolean;
+    label: string;
+    onChange: () => void;
+}) {
+    return (
+        <label
+            style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "10px",
+                borderRadius: "12px",
+                background: checked ? "rgba(37, 99, 235, 0.2)" : "rgba(15, 23, 42, 0.6)",
+                border: checked
+                    ? "1px solid rgba(96, 165, 250, 0.75)"
+                    : "1px solid rgba(148, 163, 184, 0.18)",
+                cursor: "pointer",
+            }}
+        >
+            <input type="checkbox" checked={checked} onChange={onChange} />
+
+            <span style={{ fontWeight: "bold" }}>{label}</span>
+        </label>
     );
 }
 
@@ -1471,6 +1618,218 @@ function TeacherAccessPicker({
                         </span>
                     ))
                 )}
+            </div>
+        </div>
+    );
+}
+
+function TeacherAccessEditorModal({
+    teacher,
+    adminClasses,
+    classStudents,
+    profiles,
+    selectedClassIds,
+    selectedStudentIds,
+    openClassIds,
+    otherUsersOpen,
+    saving,
+    closeModal,
+    toggleClassOpen,
+    toggleClassFolder,
+    toggleStudent,
+    toggleAllStudentsInClass,
+    setOtherUsersOpen,
+    saveTeacherAccess,
+    isStudentInAnyClass,
+}: any) {
+    return (
+        <div onClick={closeModal} style={modalOverlayStyle}>
+            <div onClick={(event) => event.stopPropagation()} style={modalStyle}>
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "14px",
+                        alignItems: "flex-start",
+                    }}
+                >
+                    <div>
+                        <h2 style={{ margin: 0 }}>Redigera elever</h2>
+                        <p style={{ margin: "6px 0 0", color: "#94a3b8" }}>
+                            {teacher.username || "Lärare utan namn"}
+                        </p>
+                    </div>
+
+                    <button onClick={closeModal} style={secondaryButtonStyle}>
+                        ✕
+                    </button>
+                </div>
+
+                <p style={{ color: "#cbd5e1", marginTop: "18px" }}>
+                    Välj vilka klassmappar läraren ska se och vilka elever som ska ligga i dem.
+                    Nya elever som läggs till senare markeras inte automatiskt.
+                </p>
+
+                <div style={{ display: "grid", gap: "12px" }}>
+                    {adminClasses.map((adminClass: AdminClass) => {
+                        const studentRows = classStudents.filter(
+                            (row: AdminClassStudent) => row.class_id === adminClass.id
+                        );
+
+                        const studentIds = studentRows.map(
+                            (row: AdminClassStudent) => row.student_id
+                        );
+
+                        const isOpen = openClassIds.includes(adminClass.id);
+                        const folderSelected = selectedClassIds.includes(adminClass.id);
+
+                        const allStudentsSelected =
+                            studentIds.length > 0 &&
+                            studentIds.every((studentId: string) =>
+                                selectedStudentIds.includes(studentId)
+                            );
+
+                        return (
+                            <div key={adminClass.id} style={classBoxStyle}>
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        gap: "10px",
+                                        flexWrap: "wrap",
+                                    }}
+                                >
+                                    <button
+                                        onClick={() => toggleClassOpen(adminClass.id)}
+                                        style={classFolderButtonStyle}
+                                    >
+                                        {isOpen ? "📂" : "📁"} {adminClass.name}
+                                        <span style={{ color: "#94a3b8", marginLeft: "6px" }}>
+                                            ({studentRows.length})
+                                        </span>
+                                    </button>
+
+                                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                        <button
+                                            onClick={() => toggleClassFolder(adminClass.id)}
+                                            style={folderSelected ? primaryButtonStyle : secondaryButtonStyle}
+                                        >
+                                            {folderSelected ? "Mapp vald" : "Välj mapp"}
+                                        </button>
+
+                                        {studentRows.length > 0 && (
+                                            <button
+                                                onClick={() => {
+                                                    if (!folderSelected) {
+                                                        toggleClassFolder(adminClass.id);
+                                                    }
+
+                                                    toggleAllStudentsInClass(studentIds);
+                                                }}
+                                                style={secondaryButtonStyle}
+                                            >
+                                                {allStudentsSelected
+                                                    ? "Avmarkera elever"
+                                                    : "Markera hela klassen"}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {isOpen && (
+                                    <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
+                                        {studentRows.length === 0 ? (
+                                            <p style={{ color: "#94a3b8", marginBottom: 0 }}>
+                                                Inga elever i klassen.
+                                            </p>
+                                        ) : (
+                                            studentRows.map((row: AdminClassStudent) => {
+                                                const student = profiles.find(
+                                                    (profile: Profile) => profile.id === row.student_id
+                                                );
+
+                                                return (
+                                                    <StudentCheckbox
+                                                        key={row.id}
+                                                        checked={selectedStudentIds.includes(row.student_id)}
+                                                        label={student?.username || "Okänd användare"}
+                                                        onChange={() => {
+                                                            if (!folderSelected) {
+                                                                toggleClassFolder(adminClass.id);
+                                                            }
+
+                                                            toggleStudent(row.student_id);
+                                                        }}
+                                                    />
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+
+                    {(() => {
+                        const otherUsers = profiles
+                            .filter((profile: Profile) => !profile.is_admin)
+                            .filter((profile: Profile) => !isStudentInAnyClass(profile.id))
+                            .sort((a: Profile, b: Profile) =>
+                                (a.username || "").localeCompare(b.username || "", "sv")
+                            );
+
+                        return (
+                            <div style={classBoxStyle}>
+                                <button
+                                    onClick={() => setOtherUsersOpen((current: boolean) => !current)}
+                                    style={classFolderButtonStyle}
+                                >
+                                    {otherUsersOpen ? "📂" : "📁"} Övriga elever utan klass
+                                    <span style={{ color: "#94a3b8", marginLeft: "6px" }}>
+                                        ({otherUsers.length})
+                                    </span>
+                                </button>
+
+                                {otherUsersOpen && (
+                                    <div style={{ display: "grid", gap: "8px", marginTop: "10px" }}>
+                                        {otherUsers.length === 0 ? (
+                                            <p style={{ color: "#94a3b8", marginBottom: 0 }}>
+                                                Inga övriga elever.
+                                            </p>
+                                        ) : (
+                                            otherUsers.map((student: Profile) => (
+                                                <StudentCheckbox
+                                                    key={student.id}
+                                                    checked={selectedStudentIds.includes(student.id)}
+                                                    label={student.username || "Inget användarnamn"}
+                                                    onChange={() => toggleStudent(student.id)}
+                                                />
+                                            ))
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
+                </div>
+
+                <div style={modalFooterStyle}>
+                    <span style={{ color: "#94a3b8", fontWeight: "bold" }}>
+                        {selectedClassIds.length} mapp(ar) · {selectedStudentIds.length} elev(er)
+                    </span>
+
+                    <button
+                        onClick={saveTeacherAccess}
+                        disabled={saving}
+                        style={{
+                            ...primaryButtonStyle,
+                            opacity: saving ? 0.6 : 1,
+                        }}
+                    >
+                        {saving ? "Sparar..." : "Spara åtkomst"}
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -1660,4 +2019,52 @@ const pillRemoveButtonStyle = {
     cursor: "pointer",
     fontSize: "16px",
     lineHeight: 1,
+};
+
+const secondaryButtonStyle = {
+    padding: "10px 12px",
+    borderRadius: "12px",
+    border: "1px solid rgba(148, 163, 184, 0.3)",
+    background: "rgba(30, 41, 59, 0.8)",
+    color: "#e2e8f0",
+    fontWeight: "bold",
+    cursor: "pointer",
+    whiteSpace: "nowrap" as const,
+};
+
+const modalOverlayStyle = {
+    position: "fixed" as const,
+    inset: 0,
+    background: "rgba(0,0,0,0.62)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 90,
+    padding: "18px",
+};
+
+const modalStyle = {
+    width: "700px",
+    maxWidth: "100%",
+    maxHeight: "82vh",
+    overflowY: "auto" as const,
+    background: "#0f172a",
+    border: "1px solid rgba(148, 163, 184, 0.25)",
+    borderRadius: "22px",
+    padding: "22px",
+    boxShadow: "0 24px 80px rgba(0,0,0,0.55)",
+};
+
+const modalFooterStyle = {
+    position: "sticky" as const,
+    bottom: "-22px",
+    margin: "18px -22px -22px",
+    padding: "14px 22px",
+    background: "rgba(15, 23, 42, 0.96)",
+    borderTop: "1px solid rgba(148, 163, 184, 0.22)",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "12px",
+    flexWrap: "wrap" as const,
 };

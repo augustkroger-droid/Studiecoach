@@ -11,34 +11,8 @@ type Profile = {
     username: string | null;
     role?: "student" | "teacher" | "admin" | null;
     created_at?: string;
-};
-
-type AdminClass = {
-    id: string;
-    admin_id: string;
-    name: string;
-    created_at: string;
-};
-
-type AdminClassStudent = {
-    id: string;
-    class_id: string;
-    student_id: string;
-    created_at: string;
-};
-
-type TeacherClassAccess = {
-    id: string;
-    teacher_id: string;
-    class_id: string;
-    created_at: string;
-};
-
-type TeacherStudentAccess = {
-    id: string;
-    teacher_id: string;
-    student_id: string;
-    created_at: string;
+    pepp_blocked_until?: string | null;
+    pepp_block_reason?: string | null;
 };
 
 type TeacherOwnClass = {
@@ -52,6 +26,13 @@ type TeacherOwnClass = {
 type TeacherOwnClassStudent = {
     id: string;
     class_id: string;
+    student_id: string;
+    created_at: string;
+};
+
+type TeacherStudentAccess = {
+    id: string;
+    teacher_id: string;
     student_id: string;
     created_at: string;
 };
@@ -109,9 +90,6 @@ export default function TeacherPage() {
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [classes, setClasses] = useState<TeacherOwnClass[]>([]);
     const [classStudents, setClassStudents] = useState<TeacherOwnClassStudent[]>([]);
-    const [newClassName, setNewClassName] = useState("");
-    const [teacherClassAccess, setTeacherClassAccess] = useState<TeacherClassAccess[]>([]);
-    const [teacherStudentAccess, setTeacherStudentAccess] = useState<TeacherStudentAccess[]>([]);
     const [sessions, setSessions] = useState<StudySession[]>([]);
     const [posts, setPosts] = useState<StudyPost[]>([]);
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -147,15 +125,6 @@ export default function TeacherPage() {
 
         setAllowed(true);
 
-        const { data: teacherClassData, error: teacherClassError } = await supabase
-            .from("teacher_classes")
-            .select("*")
-            .eq("teacher_id", user.id);
-
-        if (teacherClassError) {
-            alert(teacherClassError.message);
-        }
-
         const { data: teacherStudentData, error: teacherStudentError } = await supabase
             .from("teacher_students")
             .select("*")
@@ -165,7 +134,9 @@ export default function TeacherPage() {
             alert(teacherStudentError.message);
         }
 
-        const directStudentIds = (teacherStudentData || []).map((row) => row.student_id);
+        const directStudentIds = ((teacherStudentData || []) as TeacherStudentAccess[]).map(
+            (row) => row.student_id
+        );
 
         const { data: ownClassData, error: ownClassError } = await supabase
             .from("teacher_own_classes")
@@ -204,7 +175,7 @@ export default function TeacherPage() {
         if (allStudentIds.length > 0) {
             const { data, error } = await supabase
                 .from("profiles")
-                .select("id, username, role, created_at")
+                .select("id, username, role, created_at, pepp_blocked_until, pepp_block_reason")
                 .in("id", allStudentIds)
                 .order("username", { ascending: true });
 
@@ -230,15 +201,23 @@ export default function TeacherPage() {
             postData = postsRaw || [];
         }
 
-        setTeacherClassAccess(teacherClassData || []);
-        setTeacherStudentAccess(teacherStudentData || []);
         setClasses(ownClassData || []);
         setClassStudents(ownClassStudentData);
         setProfiles(profileData);
         setSessions(sessionData);
         setPosts(postData);
-        setSelectedUserId(profileData[0]?.id || null);
-        setOpenClassIds([]);
+
+        setSelectedUserId((currentSelectedUserId) => {
+            if (
+                currentSelectedUserId &&
+                profileData.some((profile) => profile.id === currentSelectedUserId)
+            ) {
+                return currentSelectedUserId;
+            }
+
+            return profileData[0]?.id || null;
+        });
+
         setLoading(false);
     }
 
@@ -258,10 +237,17 @@ export default function TeacherPage() {
         return classStudents.some((row) => row.student_id === studentId);
     }
 
-    async function createTeacherClass() {
-        const name = newClassName.trim();
+    function isPeppBlocked(profile: Profile) {
+        if (!profile.pepp_blocked_until) return false;
+        return new Date(profile.pepp_blocked_until) > new Date();
+    }
 
-        if (!name) return;
+    async function removeStudentFromTeacher(studentId: string) {
+        const confirmed = window.confirm(
+            "Vill du ta bort eleven från din lärarsida? Eleven tas inte bort från systemet."
+        );
+
+        if (!confirmed) return;
 
         const { data: userData } = await supabase.auth.getUser();
         const user = userData.user;
@@ -271,52 +257,49 @@ export default function TeacherPage() {
             return;
         }
 
-        const { error } = await supabase
-            .from("teacher_own_classes")
-            .insert({
-                teacher_id: user.id,
-                name,
-            });
+        const teacherClassIds = classes.map((classItem) => classItem.id);
 
-        if (error) {
-            alert(error.message);
-            return;
+        if (teacherClassIds.length > 0) {
+            const { error: classStudentError } = await supabase
+                .from("teacher_own_class_students")
+                .delete()
+                .eq("student_id", studentId)
+                .in("class_id", teacherClassIds);
+
+            if (classStudentError) {
+                alert(classStudentError.message);
+                return;
+            }
         }
 
-        setNewClassName("");
-        loadTeacherData();
-    }
-
-    async function addStudentToTeacherClass(studentId: string, classId: string) {
-        if (!classId) return;
-
-        const alreadyInClass = classStudents.some((row) => row.student_id === studentId);
-
-        if (alreadyInClass) {
-            alert("Eleven ligger redan i en klass. Ta bort eleven från den klassen först.");
-            return;
-        }
-
-        const { error } = await supabase
-            .from("teacher_own_class_students")
-            .insert({
-                class_id: classId,
-                student_id: studentId,
-            });
-
-        if (error) {
-            alert(error.message);
-            return;
-        }
-
-        loadTeacherData();
-    }
-
-    async function removeStudentFromTeacherClass(rowId: string) {
-        const { error } = await supabase
-            .from("teacher_own_class_students")
+        const { error: teacherStudentError } = await supabase
+            .from("teacher_students")
             .delete()
-            .eq("id", rowId);
+            .eq("teacher_id", user.id)
+            .eq("student_id", studentId);
+
+        if (teacherStudentError) {
+            alert(teacherStudentError.message);
+            return;
+        }
+
+        loadTeacherData();
+    }
+
+    async function blockUserFromPepp(userIdToBlock: string, days: number) {
+        const confirmed = window.confirm(`Blockera eleven från Pepp i ${days} dagar?`);
+        if (!confirmed) return;
+
+        const blockedUntil = new Date();
+        blockedUntil.setDate(blockedUntil.getDate() + days);
+
+        const { error } = await supabase
+            .from("profiles")
+            .update({
+                pepp_blocked_until: blockedUntil.toISOString(),
+                pepp_block_reason: "Blockerad av lärare",
+            })
+            .eq("id", userIdToBlock);
 
         if (error) {
             alert(error.message);
@@ -326,17 +309,17 @@ export default function TeacherPage() {
         loadTeacherData();
     }
 
-    async function deleteTeacherClass(classId: string) {
-        const confirmed = window.confirm(
-            "Vill du ta bort klassmappen? Eleverna tas inte bort, bara själva mappen."
-        );
-
+    async function unblockUserFromPepp(userIdToUnblock: string) {
+        const confirmed = window.confirm("Ta bort Pepp-blockeringen?");
         if (!confirmed) return;
 
         const { error } = await supabase
-            .from("teacher_own_classes")
-            .delete()
-            .eq("id", classId);
+            .from("profiles")
+            .update({
+                pepp_blocked_until: null,
+                pepp_block_reason: null,
+            })
+            .eq("id", userIdToUnblock);
 
         if (error) {
             alert(error.message);
@@ -442,24 +425,12 @@ export default function TeacherPage() {
 
             <h1>👩‍🏫 Lärarsida</h1>
             <p style={{ color: "#94a3b8" }}>
-                Här ser du de klasser och elever som en admin har delat med dig.
+                Här ser du de mappar och elever som en admin har delat med dig.
             </p>
 
             <section style={teacherLayoutStyle}>
                 <section style={cardStyle}>
                     <h2>Mina elever</h2>
-                    <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
-                        <input
-                            value={newClassName}
-                            onChange={(event) => setNewClassName(event.target.value)}
-                            placeholder="Ny klass, t.ex. 8A"
-                            style={inputStyle}
-                        />
-
-                        <button onClick={createTeacherClass} style={primaryButtonStyle}>
-                            Skapa klass
-                        </button>
-                    </div>
 
                     {classes.length === 0 && ungroupedStudents.length === 0 ? (
                         <p style={{ color: "#94a3b8" }}>
@@ -492,13 +463,9 @@ export default function TeacherPage() {
                                             >
                                                 {openClassIds.includes(classItem.id) ? "📂" : "📁"}{" "}
                                                 {classItem.name}
-                                            </button>
-
-                                            <button
-                                                onClick={() => deleteTeacherClass(classItem.id)}
-                                                style={dangerSmallButtonStyle}
-                                            >
-                                                Ta bort
+                                                <span style={{ color: "#94a3b8", marginLeft: "6px" }}>
+                                                    ({studentsInClass.length})
+                                                </span>
                                             </button>
                                         </div>
 
@@ -506,46 +473,37 @@ export default function TeacherPage() {
                                             <div style={{ marginTop: "12px" }}>
                                                 {studentsInClass.length === 0 ? (
                                                     <p style={{ color: "#94a3b8", margin: 0 }}>
-                                                        Inga elever i klassen.
+                                                        Inga elever i mappen.
                                                     </p>
                                                 ) : (
-                                                    studentsInClass.map((student) => {
-                                                        const classRow = classStudents.find(
-                                                            (row) =>
-                                                                row.class_id === classItem.id &&
-                                                                row.student_id === student.id
-                                                        );
+                                                    studentsInClass.map((student) => (
+                                                        <div key={student.id} style={classStudentRowStyle}>
+                                                            <button
+                                                                onClick={() => setSelectedUserId(student.id)}
+                                                                style={{
+                                                                    ...studentButtonStyle,
+                                                                    border:
+                                                                        selectedUserId === student.id
+                                                                            ? "1px solid rgba(96, 165, 250, 0.8)"
+                                                                            : "1px solid rgba(148, 163, 184, 0.18)",
+                                                                    background:
+                                                                        selectedUserId === student.id
+                                                                            ? "rgba(37, 99, 235, 0.2)"
+                                                                            : "rgba(15, 23, 42, 0.72)",
+                                                                }}
+                                                            >
+                                                                {student.username || "Elev utan namn"}
+                                                            </button>
 
-                                                        return (
-                                                            <div key={student.id} style={classStudentRowStyle}>
-                                                                <button
-                                                                    onClick={() => setSelectedUserId(student.id)}
-                                                                    style={{
-                                                                        ...studentButtonStyle,
-                                                                        border:
-                                                                            selectedUserId === student.id
-                                                                                ? "1px solid rgba(96, 165, 250, 0.8)"
-                                                                                : "1px solid rgba(148, 163, 184, 0.18)",
-                                                                        background:
-                                                                            selectedUserId === student.id
-                                                                                ? "rgba(37, 99, 235, 0.2)"
-                                                                                : "rgba(15, 23, 42, 0.72)",
-                                                                    }}
-                                                                >
-                                                                    {student.username || "Elev utan namn"}
-                                                                </button>
-
-                                                                {classRow && (
-                                                                    <button
-                                                                        onClick={() => removeStudentFromTeacherClass(classRow.id)}
-                                                                        style={dangerSmallButtonStyle}
-                                                                    >
-                                                                        ×
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })
+                                                            <button
+                                                                onClick={() => removeStudentFromTeacher(student.id)}
+                                                                style={dangerSmallButtonStyle}
+                                                                title="Ta bort eleven från min lärarsida"
+                                                            >
+                                                                ×
+                                                            </button>
+                                                        </div>
+                                                    ))
                                                 )}
                                             </div>
                                         )}
@@ -559,7 +517,7 @@ export default function TeacherPage() {
 
                                     <div style={{ marginTop: "12px" }}>
                                         {ungroupedStudents.map((student) => (
-                                            <div key={student.id}>
+                                            <div key={student.id} style={classStudentRowStyle}>
                                                 <button
                                                     onClick={() => setSelectedUserId(student.id)}
                                                     style={{
@@ -577,24 +535,13 @@ export default function TeacherPage() {
                                                     {student.username || "Elev utan namn"}
                                                 </button>
 
-                                                <select
-                                                    defaultValue=""
-                                                    onChange={(event) => {
-                                                        addStudentToTeacherClass(student.id, event.target.value);
-                                                        event.currentTarget.value = "";
-                                                    }}
-                                                    style={selectStyle}
+                                                <button
+                                                    onClick={() => removeStudentFromTeacher(student.id)}
+                                                    style={dangerSmallButtonStyle}
+                                                    title="Ta bort eleven från min lärarsida"
                                                 >
-                                                    <option value="" disabled>
-                                                        Lägg i klass...
-                                                    </option>
-
-                                                    {classes.map((classItem) => (
-                                                        <option key={classItem.id} value={classItem.id}>
-                                                            {classItem.name}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                    ×
+                                                </button>
                                             </div>
                                         ))}
                                     </div>
@@ -616,6 +563,88 @@ export default function TeacherPage() {
                                 <h1 style={{ margin: "8px 0 0" }}>
                                     {selectedProfile.username || "Elev utan namn"}
                                 </h1>
+
+                                <div
+                                    style={{
+                                        marginTop: "18px",
+                                        padding: "14px",
+                                        borderRadius: "16px",
+                                        background: isPeppBlocked(selectedProfile)
+                                            ? "rgba(239, 68, 68, 0.13)"
+                                            : "rgba(15, 23, 42, 0.65)",
+                                        border: isPeppBlocked(selectedProfile)
+                                            ? "1px solid rgba(248, 113, 113, 0.45)"
+                                            : "1px solid rgba(148, 163, 184, 0.22)",
+                                    }}
+                                >
+                                    <strong>
+                                        {isPeppBlocked(selectedProfile)
+                                            ? "🚫 Blockerad från Pepp"
+                                            : "✅ Kan posta på Pepp"}
+                                    </strong>
+
+                                    {selectedProfile.pepp_blocked_until && (
+                                        <p
+                                            style={{
+                                                margin: "6px 0 0",
+                                                color: "#94a3b8",
+                                                fontSize: "14px",
+                                            }}
+                                        >
+                                            Blockerad till:{" "}
+                                            {new Date(
+                                                selectedProfile.pepp_blocked_until
+                                            ).toLocaleString("sv-SE")}
+                                        </p>
+                                    )}
+
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            gap: "8px",
+                                            marginTop: "12px",
+                                            flexWrap: "wrap",
+                                        }}
+                                    >
+                                        {isPeppBlocked(selectedProfile) ? (
+                                            <button
+                                                onClick={() => unblockUserFromPepp(selectedProfile.id)}
+                                                style={primaryButtonStyle}
+                                            >
+                                                Ta bort blockering
+                                            </button>
+                                        ) : (
+                                            <>
+                                                <button
+                                                    onClick={() =>
+                                                        blockUserFromPepp(selectedProfile.id, 1)
+                                                    }
+                                                    style={dangerSmallButtonStyle}
+                                                >
+                                                    Blockera 1 dag
+                                                </button>
+
+                                                <button
+                                                    onClick={() =>
+                                                        blockUserFromPepp(selectedProfile.id, 7)
+                                                    }
+                                                    style={dangerSmallButtonStyle}
+                                                >
+                                                    Blockera 7 dagar
+                                                </button>
+
+                                                <button
+                                                    onClick={() =>
+                                                        blockUserFromPepp(selectedProfile.id, 30)
+                                                    }
+                                                    style={dangerSmallButtonStyle}
+                                                >
+                                                    Blockera 30 dagar
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
                             </section>
 
                             <section style={gridStyle}>
@@ -869,16 +898,6 @@ const postCardStyle = {
     marginBottom: "14px",
 };
 
-const inputStyle = {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: "12px",
-    border: "1px solid rgba(148, 163, 184, 0.35)",
-    background: "rgba(2, 6, 23, 0.75)",
-    color: "white",
-    boxSizing: "border-box" as const,
-};
-
 const primaryButtonStyle = {
     padding: "10px 12px",
     borderRadius: "12px",
@@ -898,16 +917,6 @@ const dangerSmallButtonStyle = {
     color: "#fecaca",
     fontWeight: "bold",
     cursor: "pointer",
-};
-
-const selectStyle = {
-    width: "100%",
-    marginTop: "6px",
-    padding: "9px 10px",
-    borderRadius: "10px",
-    border: "1px solid rgba(148, 163, 184, 0.25)",
-    background: "rgba(2, 6, 23, 0.75)",
-    color: "#e2e8f0",
 };
 
 const classStudentRowStyle = {
