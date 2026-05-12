@@ -46,11 +46,16 @@ type StudyPost = {
     title?: string | null;
 };
 
+type Reaction = "❤️" | "🔥" | "👏" | "💪" | "🎉" | "🤯";
+
 type Like = {
     id: string;
     post_id: string;
     user_id: string;
+    reaction: Reaction;
 };
+
+const REACTIONS: Reaction[] = ["❤️", "🔥", "👏", "💪", "🎉", "🤯"];
 
 type PostComment = {
     id: string;
@@ -231,7 +236,7 @@ function PeppPageContent() {
 
         loadedPosts.forEach((post) => {
             profileIds.add(post.user_id);
-        }); 2
+        });
 
         loadedTeacherStudentIds.forEach((studentId) => {
             profileIds.add(studentId);
@@ -440,34 +445,69 @@ function PeppPageContent() {
         loadEverything();
     }
 
-    async function toggleLike(postId: string) {
-        const existingLike = likes.find(
+    async function toggleReaction(postId: string, reaction: Reaction) {
+        const existingReaction = likes.find(
             (like) => like.post_id === postId && like.user_id === userId
         );
 
-        if (existingLike) {
+        if (existingReaction?.reaction === reaction) {
             const { error } = await supabase
                 .from("post_likes")
                 .delete()
-                .eq("id", existingLike.id);
+                .eq("post_id", postId)
+                .eq("user_id", userId);
 
             if (error) {
                 alert(error.message);
                 return;
             }
-        } else {
-            const { error } = await supabase
+
+            setLikes((current) =>
+                current.filter(
+                    (like) => !(like.post_id === postId && like.user_id === userId)
+                )
+            );
+
+            return;
+        }
+
+        if (existingReaction) {
+            const { error: deleteError } = await supabase
                 .from("post_likes")
-                .insert({
-                    post_id: postId,
-                    user_id: userId,
-                });
+                .delete()
+                .eq("post_id", postId)
+                .eq("user_id", userId);
 
-            if (error) {
-                alert(error.message);
+            if (deleteError) {
+                alert(deleteError.message);
                 return;
             }
+        }
 
+        const { data, error } = await supabase
+            .from("post_likes")
+            .insert({
+                post_id: postId,
+                user_id: userId,
+                reaction,
+            })
+            .select()
+            .single();
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setLikes((current) => {
+            const withoutOld = current.filter(
+                (like) => !(like.post_id === postId && like.user_id === userId)
+            );
+
+            return [...withoutOld, data];
+        });
+
+        if (!existingReaction) {
             const post = posts.find((post) => post.id === postId);
 
             if (post) {
@@ -478,8 +518,6 @@ function PeppPageContent() {
                 });
             }
         }
-
-        loadLikes();
     }
 
     async function addComment(postId: string) {
@@ -569,7 +607,7 @@ function PeppPageContent() {
 
         const message =
             type === "like"
-                ? `${actorName} har gillat ditt studiepass`
+                ? `${actorName} har reagerat på ditt studiepass`
                 : `${actorName} har kommenterat på ditt studiepass`;
 
         const { error } = await supabase
@@ -713,8 +751,16 @@ function PeppPageContent() {
                             </p>
                         ) : (
                             posts.map((post) => {
-                                const postLikes = likes.filter((like) => like.post_id === post.id);
-                                const likedByMe = postLikes.some((like) => like.user_id === userId);
+                                const postReactions = likes.filter((like) => like.post_id === post.id);
+
+                                const myReaction = postReactions.find(
+                                    (like) => like.user_id === userId
+                                );
+
+                                const reactionCounts = REACTIONS.map((reaction) => ({
+                                    reaction,
+                                    count: postReactions.filter((like) => like.reaction === reaction).length,
+                                })).filter((item) => item.count > 0);
 
                                 return (
                                     <article
@@ -837,87 +883,147 @@ function PeppPageContent() {
                                             </button>
 
                                             <div
-                                                style={{ position: "relative" }}
+                                                style={{
+                                                    position: "relative",
+                                                    display: "flex",
+                                                    flexDirection: "column",
+                                                    alignItems: "flex-end",
+                                                    paddingTop: "58px",
+                                                    marginTop: "-58px",
+                                                }}
                                                 onMouseEnter={() => setHoveredLikesPostId(post.id)}
                                                 onMouseLeave={() => setHoveredLikesPostId(null)}
                                             >
-                                                <button
-                                                    onClick={() => toggleLike(post.id)}
-                                                    style={{
-                                                        height: "44px",
-                                                        minWidth: "72px",
-                                                        padding: "0 16px",
-                                                        borderRadius: "999px",
-                                                        background: likedByMe
-                                                            ? "rgba(239, 68, 68, 0.16)"
-                                                            : "rgba(15, 23, 42, 0.72)",
-                                                        color: likedByMe ? "#fecaca" : "#ffffff",
-                                                        border: likedByMe
-                                                            ? "1px solid rgba(248, 113, 113, 0.42)"
-                                                            : "1px solid rgba(148, 163, 184, 0.22)",
-                                                        cursor: "pointer",
-                                                        fontWeight: "bold",
-                                                        fontSize: "16px",
-                                                        boxShadow: likedByMe
-                                                            ? "0 0 20px rgba(239,68,68,0.12)"
-                                                            : "none",
-                                                        transition: "0.2s ease",
-                                                    }}
-                                                >
-                                                    ❤️ {postLikes.length}
-                                                </button>
-
-                                                {hoveredLikesPostId === post.id && postLikes.length > 0 && (
+                                                {hoveredLikesPostId === post.id && (
                                                     <div
                                                         style={{
                                                             position: "absolute",
-                                                            top: "54px",
                                                             right: 0,
-                                                            minWidth: "190px",
-                                                            maxWidth: "240px",
-                                                            padding: "12px",
-                                                            borderRadius: "16px",
-                                                            background: "rgba(15, 23, 42, 0.96)",
-                                                            border: "1px solid rgba(148, 163, 184, 0.2)",
-                                                            boxShadow: "0 18px 40px rgba(0,0,0,0.45)",
-                                                            backdropFilter: "blur(10px)",
-                                                            zIndex: 20,
+                                                            top: 0,
+                                                            display: "flex",
+                                                            gap: "8px",
+                                                            padding: "9px 11px",
+                                                            borderRadius: "999px",
+                                                            background: "rgba(15, 23, 42, 0.92)",
+                                                            border: "1px solid rgba(148, 163, 184, 0.22)",
+                                                            boxShadow: "0 18px 45px rgba(0,0,0,0.45)",
+                                                            backdropFilter: "blur(14px)",
+                                                            zIndex: 40,
                                                         }}
                                                     >
-                                                        <div
-                                                            style={{
-                                                                fontSize: "13px",
-                                                                color: "#94a3b8",
-                                                                marginBottom: "8px",
-                                                                fontWeight: "bold",
-                                                            }}
-                                                        >
-                                                            Gillat av
-                                                        </div>
+                                                        {REACTIONS.map((reaction) => (
+                                                            <button
+                                                                key={reaction}
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    toggleReaction(post.id, reaction);
+                                                                }}
+                                                                style={{
+                                                                    width: "44px",
+                                                                    height: "44px",
+                                                                    borderRadius: "999px",
+                                                                    border:
+                                                                        myReaction?.reaction === reaction
+                                                                            ? "1px solid rgba(251, 191, 36, 0.65)"
+                                                                            : "1px solid rgba(255,255,255,0.06)",
+                                                                    background:
+                                                                        myReaction?.reaction === reaction
+                                                                            ? "rgba(251, 191, 36, 0.16)"
+                                                                            : "rgba(255,255,255,0.07)",
+                                                                    cursor: "pointer",
+                                                                    fontSize: "24px",
+                                                                    lineHeight: 1,
+                                                                    display: "grid",
+                                                                    placeItems: "center",
+                                                                    transition: "transform 0.16s ease, background 0.16s ease",
+                                                                }}
+                                                                onMouseEnter={(e) => {
+                                                                    e.currentTarget.style.transform = "translateY(-6px) scale(1.22)";
+                                                                }}
+                                                                onMouseLeave={(e) => {
+                                                                    e.currentTarget.style.transform =
+                                                                        myReaction?.reaction === reaction
+                                                                            ? "translateY(-3px) scale(1.1)"
+                                                                            : "translateY(0) scale(1)";
+                                                                }}
+                                                            >
+                                                                {reaction}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
 
-                                                        <div
-                                                            style={{
-                                                                display: "flex",
-                                                                flexDirection: "column",
-                                                                gap: "8px",
-                                                            }}
-                                                        >
-                                                            {postLikes.map((like) => (
-                                                                <div
-                                                                    key={like.id}
-                                                                    style={{
-                                                                        padding: "8px 10px",
-                                                                        borderRadius: "10px",
-                                                                        background: "rgba(30, 41, 59, 0.72)",
-                                                                        color: "#e2e8f0",
-                                                                        fontWeight: "bold",
-                                                                        fontSize: "14px",
-                                                                    }}
-                                                                >
-                                                                    {getUsername(like.user_id)}
-                                                                </div>
-                                                            ))}
-                                                        </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (myReaction) {
+                                                            toggleReaction(post.id, myReaction.reaction);
+                                                        } else {
+                                                            toggleReaction(post.id, "❤️");
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        height: "46px",
+                                                        minWidth: "96px",
+                                                        padding: "0 18px",
+                                                        borderRadius: "999px",
+                                                        background: myReaction
+                                                            ? "linear-gradient(135deg, rgba(239,68,68,0.24), rgba(251,113,133,0.14))"
+                                                            : "rgba(15, 23, 42, 0.78)",
+                                                        color: myReaction ? "#fecaca" : "#e2e8f0",
+                                                        border: myReaction
+                                                            ? "1px solid rgba(248, 113, 113, 0.42)"
+                                                            : "1px solid rgba(226, 232, 240, 0.32)",
+                                                        cursor: "pointer",
+                                                        fontWeight: "bold",
+                                                        fontSize: "16px",
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                        gap: "7px",
+                                                        boxShadow: myReaction
+                                                            ? "0 0 22px rgba(239,68,68,0.16)"
+                                                            : "0 8px 22px rgba(0,0,0,0.18)",
+                                                        transition: "0.18s ease",
+                                                    }}
+                                                >
+                                                    <span style={{ fontSize: myReaction ? "20px" : "18px" }}>
+                                                        {myReaction?.reaction || "🤍"}
+                                                    </span>
+                                                    <span>{postReactions.length}</span>
+                                                </button>
+
+                                                {reactionCounts.length > 0 && (
+                                                    <div
+                                                        style={{
+                                                            marginTop: "8px",
+                                                            display: "flex",
+                                                            justifyContent: "flex-end",
+                                                            gap: "6px",
+                                                            flexWrap: "wrap",
+                                                        }}
+                                                    >
+                                                        {reactionCounts.map((item) => (
+                                                            <div
+                                                                key={item.reaction}
+                                                                style={{
+                                                                    display: "flex",
+                                                                    alignItems: "center",
+                                                                    gap: "5px",
+                                                                    padding: "5px 9px",
+                                                                    borderRadius: "999px",
+                                                                    background: "rgba(15, 23, 42, 0.62)",
+                                                                    border: "1px solid rgba(148, 163, 184, 0.14)",
+                                                                    color: "#cbd5e1",
+                                                                    fontSize: "13px",
+                                                                    fontWeight: "bold",
+                                                                }}
+                                                            >
+                                                                <span>{item.reaction}</span>
+                                                                <span>{item.count}</span>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 )}
                                             </div>
