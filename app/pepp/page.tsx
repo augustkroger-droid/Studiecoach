@@ -454,6 +454,48 @@ function PeppPageContent() {
         loadEverything();
     }
 
+    async function removeFriend(friendId: string) {
+        const confirmed = window.confirm(
+            `Är du säker på att du vill ta bort ${getUsername(friendId)} som vän? Ni kommer inte längre se varandras inlägg.`
+        );
+
+        if (!confirmed) return;
+
+        const { data, error } = await supabase
+            .from("friend_requests")
+            .delete()
+            .or(
+                `and(from_user_id.eq.${userId},to_user_id.eq.${friendId}),and(from_user_id.eq.${friendId},to_user_id.eq.${userId})`
+            )
+            .eq("status", "accepted")
+            .select();
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        if (!data || data.length === 0) {
+            alert("Kunde inte ta bort vännen.");
+            return;
+        }
+
+        setFriendRequests((current) =>
+            current.filter(
+                (request) =>
+                    !(
+                        request.status === "accepted" &&
+                        (
+                            (request.from_user_id === userId && request.to_user_id === friendId) ||
+                            (request.from_user_id === friendId && request.to_user_id === userId)
+                        )
+                    )
+            )
+        );
+
+        loadEverything();
+    }
+
     async function acceptFriendRequest(requestId: string) {
         const { error } = await supabase
             .from("friend_requests")
@@ -1378,6 +1420,25 @@ function PeppPageContent() {
                             acceptedFriendIds.map((friendId) => (
                                 <div key={friendId} style={friendRowStyle}>
                                     <strong>{getUsername(friendId)}</strong>
+
+                                    <button
+                                        onClick={() => removeFriend(friendId)}
+                                        style={{
+                                            width: "30px",
+                                            height: "30px",
+                                            borderRadius: "999px",
+                                            border: "1px solid rgba(248, 113, 113, 0.45)",
+                                            background: "rgba(239, 68, 68, 0.12)",
+                                            color: "#fecaca",
+                                            cursor: "pointer",
+                                            fontWeight: "bold",
+                                            fontSize: "15px",
+                                            lineHeight: 1,
+                                        }}
+                                        title="Ta bort vän"
+                                    >
+                                        ✕
+                                    </button>
                                 </div>
                             ))
                         )}
