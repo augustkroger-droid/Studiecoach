@@ -911,8 +911,6 @@ function PeppPageContent() {
                                                     display: "flex",
                                                     flexDirection: "column",
                                                     alignItems: "flex-end",
-                                                    paddingTop: "58px",
-                                                    marginTop: "-58px",
                                                 }}
                                                 onMouseEnter={(e) => {
                                                     const target = e.target as HTMLElement;
@@ -929,7 +927,7 @@ function PeppPageContent() {
                                                         style={{
                                                             position: "absolute",
                                                             right: 0,
-                                                            top: 0,
+                                                            bottom: "54px",
                                                             display: "flex",
                                                             gap: "8px",
                                                             padding: "9px 11px",
