@@ -239,6 +239,28 @@ function PeppPageContent() {
             profileIds.add(post.user_id);
         });
 
+        const visiblePostIds = loadedPosts.map((post) => post.id);
+
+        if (visiblePostIds.length > 0) {
+            const { data: reactionData } = await supabase
+                .from("post_likes")
+                .select("user_id")
+                .in("post_id", visiblePostIds);
+
+            reactionData?.forEach((reaction) => {
+                profileIds.add(reaction.user_id);
+            });
+
+            const { data: commentData } = await supabase
+                .from("post_comments")
+                .select("user_id")
+                .in("post_id", visiblePostIds);
+
+            commentData?.forEach((comment) => {
+                profileIds.add(comment.user_id);
+            });
+        }
+
         loadedTeacherStudentIds.forEach((studentId) => {
             profileIds.add(studentId);
         });
