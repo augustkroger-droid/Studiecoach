@@ -197,6 +197,7 @@ export default function PassPage() {
     const [showBreakModal, setShowBreakModal] = useState(false);
     const [breakSecondsLeft, setBreakSecondsLeft] = useState(BREAK_SECONDS);
     const [breakDone, setBreakDone] = useState(false);
+    const [timerMinimized, setTimerMinimized] = useState(false);
 
     const canEditTime = isEditMode && !["active", "paused", "done"].includes(sessionStatus);
 
@@ -1171,6 +1172,7 @@ export default function PassPage() {
     return (
         <main
             style={{
+                position: "relative",
                 minHeight: "100vh",
                 overflowX: "auto",
                 padding: "32px",
@@ -1188,32 +1190,65 @@ export default function PassPage() {
                     <div
                         className="pass-timer-card"
                         style={{
-                            position: "fixed",
-                            top: "24px",
-                            right: "32px",
                             background: "rgba(15, 23, 42, 0.92)",
-                            padding: "18px",
                             borderRadius: "18px",
-                            boxShadow: "0 10px 25px rgba(0,0,0,0.4)",
+                            boxShadow: "0 10px 25px rgba(0,0,0,0.28)",
+                            position: "absolute",
+                            top: "100px",
+                            right: "32px",
+                            padding: "18px",
                             width: "230px",
                             textAlign: "center",
-                            zIndex: 10,
                             border: "1px solid rgba(148, 163, 184, 0.18)",
+                            transition: "0.2s ease",
                         }}
                     >
                         <div
                             style={{
-                                fontSize: "42px",
-                                fontWeight: "bold",
-                                marginBottom: "14px",
+                                display: "flex",
+                                justifyContent: "flex-end",
+                                marginBottom: timerMinimized ? "10px" : "6px",
                             }}
                         >
-                            {formatTime(secondsLeft)}
+                            <button
+                                onClick={() => setTimerMinimized((v) => !v)}
+                                style={{
+                                    width: "36px",
+                                    height: "36px",
+                                    borderRadius: "999px",
+                                    border: "1px solid rgba(148, 163, 184, 0.28)",
+                                    background: "rgba(255,255,255,0.06)",
+                                    color: "#e2e8f0",
+                                    cursor: "pointer",
+                                    fontWeight: 900,
+                                    fontSize: "20px",
+                                    lineHeight: 1,
+                                }}
+                                type="button"
+                                title={timerMinimized ? "Visa klocka" : "Dölj klocka"}
+                            >
+                                {timerMinimized ? "+" : "−"}
+                            </button>
                         </div>
+
+                        {!timerMinimized && (
+                            <div
+                                style={{
+                                    fontSize: "42px",
+                                    fontWeight: "bold",
+                                    marginBottom: "18px",
+                                    textAlign: "center",
+                                    width: "100%",
+                                }}
+                            >
+                                {formatTime(secondsLeft)}
+                            </div>
+                        )}
 
                         <button
                             onClick={togglePause}
                             style={{ ...smallButton, width: "100%", marginBottom: "8px" }}
+                            type="button"
                         >
                             {isRunning ? "Pausa" : "Fortsätt"}
                         </button>
@@ -1230,9 +1265,11 @@ export default function PassPage() {
                                 cursor: "pointer",
                                 fontWeight: "bold",
                             }}
+                            type="button"
                         >
                             Avsluta tidigare
                         </button>
+
                         {showBreakSuggestion && (
                             <div
                                 style={{
@@ -1299,15 +1336,9 @@ export default function PassPage() {
                                 </div>
                             </div>
                         )}
-                        <div
-                            style={{
-                                marginTop: "12px",
-                            }}
-                        >
-                            <ThemePicker
-                                themeKey={themeKey}
-                                setThemeKey={setThemeKey}
-                            />
+
+                        <div style={{ marginTop: "14px" }}>
+                            <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
                         </div>
                     </div>
                 )}
@@ -1871,7 +1902,7 @@ export default function PassPage() {
                                         <p style={{ margin: 0, color: "#94a3b8", fontSize: "13px" }}>
                                             Max {MAX_FILE_SIZE_MB} MB per fil.
                                         </p>
-                                        
+
                                         <label
                                             style={{
                                                 ...smallButton,
