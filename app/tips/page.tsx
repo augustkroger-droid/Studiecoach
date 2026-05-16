@@ -5,6 +5,8 @@ import NavBar from "@/components/NavBar";
 import { getSavedTheme, THEMES, ThemeKey } from "@/lib/themes";
 import ThemePicker from "@/components/ThemePicker";
 
+export const TIPS_VERSION = "2026-05-17-1";
+
 const sections = [
     {
         emoji: "📅",
@@ -453,6 +455,8 @@ export default function TipsPage() {
 
     useEffect(() => {
         setThemeKey(getSavedTheme());
+
+        localStorage.setItem("seenTipsVersion", TIPS_VERSION);
     }, []);
 
     const theme = THEMES[themeKey];
@@ -525,6 +529,86 @@ export default function TipsPage() {
                             onOpen={() => setActiveIndex(index)}
                         />
                     ))}
+                </div>
+
+                <div
+                    style={{
+                        marginTop: "50px",
+                    }}
+                >
+                    <h2
+                        style={{
+                            fontSize: "34px",
+                            marginBottom: "12px",
+                        }}
+                    >
+                        🎥 Videotips för smartare plugg
+                    </h2>
+
+                    <p
+                        style={{
+                            color: "#94a3b8",
+                            lineHeight: 1.7,
+                            marginBottom: "26px",
+                            maxWidth: "800px",
+                        }}
+                    >
+                        Här hittar du videor med tips om studieteknik, fokus,
+                        motivation och hur du pluggar effektivare.
+                    </p>
+
+                    <div
+                        style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+                            gap: "22px",
+                        }}
+                    >
+                        {[
+                            "qsUrEMpSmTc",
+                            "0rIjFCNay2Q",
+                            "TjPFZaMe2yw",
+                        ].map((videoId) => (
+                            <div
+                                key={videoId}
+                                style={{
+                                    borderRadius: "24px",
+                                    overflow: "hidden",
+                                    background: theme.card,
+                                    border: `1px solid ${theme.border}`,
+                                    boxShadow: "0 20px 45px rgba(0,0,0,0.28)",
+                                }}
+                            >
+                                <iframe
+                                    width="100%"
+                                    height="220"
+                                    src={`https://www.youtube.com/embed/${videoId}`}
+                                    title="YouTube video"
+                                    style={{
+                                        border: "none",
+                                    }}
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                />
+
+                                <div
+                                    style={{
+                                        padding: "18px",
+                                    }}
+                                >
+                                    <p
+                                        style={{
+                                            margin: 0,
+                                            color: "#cbd5e1",
+                                            lineHeight: 1.7,
+                                        }}
+                                    >
+                                        Smarta tips för bättre fokus, planering och effektivare studier.
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
                 <div

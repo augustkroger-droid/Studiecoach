@@ -3,10 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { TIPS_VERSION } from "@/app/tips/page";
 import { supabase } from "@/lib/supabase";
 import NotificationBell from "@/components/NotificationBell";
 
 export default function NavBar() {
+  const [showTipsStar, setShowTipsStar] = useState(false);
+
+  useEffect(() => {
+    const seenTipsVersion = localStorage.getItem("seenTipsVersion");
+    setShowTipsStar(seenTipsVersion !== TIPS_VERSION);
+  }, []);
+
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
@@ -71,6 +79,7 @@ export default function NavBar() {
   }
 
   if (!roleLoaded) {
+    
     return (
       <nav
         className="main-navbar"
@@ -126,7 +135,39 @@ export default function NavBar() {
         />
       )}
       <NavItem href="/pepp" label="🔥 Pepp" active={pathname === "/pepp"} />
-      <NavItem href="/tips" label="💡 Tips" active={pathname === "/tips"} />
+      <NavItem
+        href="/tips"
+        active={pathname === "/tips"}
+        label={
+          <span
+            style={{
+              position: "relative",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            💡 Tips
+
+            {showTipsStar && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: "-2px",
+                  right: "-10px",
+                  width: "10px",
+                  height: "10px",
+                  borderRadius: "999px",
+                  background: "#60a5fa",
+                  boxShadow: "0 0 14px rgba(96,165,250,0.95)",
+                  animation: "softPulse 3s ease-in-out infinite",
+                }}
+                title="Nytt på Tips-sidan"
+              />
+            )}
+          </span>
+        }
+      />
       <NavItem href="/profil" label="👤 Profil" active={pathname === "/profil"} />
 
 
@@ -163,7 +204,7 @@ function NavItem({
   active,
 }: {
   href: string;
-  label: string;
+  label: React.ReactNode;
   active: boolean;
 }) {
   return (
