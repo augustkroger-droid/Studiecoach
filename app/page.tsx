@@ -308,12 +308,19 @@ export default function Home() {
     return dateString === formatDate(new Date());
   }
 
-  const oneWeekAgo = new Date();
-  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+  const today = new Date();
+  const day = today.getDay();
+
+  const diff = (day === 0 ? -6 : 1) - day;
+
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + diff);
+  monday.setHours(0, 0, 0, 0);
+
+  const weekStart = formatDate(monday);
 
   const postsLastWeek = posts.filter((post) => {
-    const postDate = new Date(post.date);
-    return postDate >= oneWeekAgo;
+    return post.date >= weekStart;
   });
 
   const leaderboardMap: Record<string, number> = {};
