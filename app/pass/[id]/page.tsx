@@ -198,6 +198,7 @@ export default function PassPage() {
     const [breakSecondsLeft, setBreakSecondsLeft] = useState(BREAK_SECONDS);
     const [breakDone, setBreakDone] = useState(false);
     const [timerMinimized, setTimerMinimized] = useState(false);
+    const [isMobileTimer, setIsMobileTimer] = useState(false);
     const [timerPosition, setTimerPosition] = useState<{ x: number; y: number } | null>(null);
     const [timerReady, setTimerReady] = useState(false);
     const [timerDragging, setTimerDragging] = useState(false);
@@ -642,6 +643,19 @@ export default function PassPage() {
             document.removeEventListener("click", handleInternalLinkClick, true);
         };
     }, [isStudyMode, router, pauseSession]);
+
+    useEffect(() => {
+        function checkMobileTimer() {
+            setIsMobileTimer(window.innerWidth <= 768);
+        }
+
+        checkMobileTimer();
+        window.addEventListener("resize", checkMobileTimer);
+
+        return () => {
+            window.removeEventListener("resize", checkMobileTimer);
+        };
+    }, []);
 
     function openEndModal(actualMinutes: number) {
         completeSession(actualMinutes);
@@ -1228,6 +1242,7 @@ export default function PassPage() {
                         ref={timerCardRef}
                         className="pass-timer-card"
                         onMouseDown={(event) => {
+                            if (isMobileTimer) return;
                             const rect = event.currentTarget.getBoundingClientRect();
 
                             const currentPosition = {
@@ -1256,19 +1271,23 @@ export default function PassPage() {
                             background: "rgba(15, 23, 42, 0.92)",
                             borderRadius: "18px",
                             boxShadow: "0 10px 25px rgba(0,0,0,0.28)",
-                            position: "fixed",
-                            top: timerPosition ? 0 : "100px",
-                            right: timerPosition ? "auto" : "32px",
-                            left: timerPosition ? 0 : "auto",
-                            transform: timerPosition
-                                ? `translate3d(${timerPosition.x}px, ${timerPosition.y}px, 0)`
-                                : "none",
-                            willChange: "transform",
-                            cursor: timerDragging ? "grabbing" : "grab",
+                            position: isMobileTimer ? "sticky" : "fixed",
+                            top: isMobileTimer ? "12px" : timerPosition ? 0 : "100px",
+                            right: isMobileTimer ? "auto" : timerPosition ? "auto" : "32px",
+                            left: isMobileTimer ? "auto" : timerPosition ? 0 : "auto",
+                            transform: isMobileTimer
+                                ? "none"
+                                : timerPosition
+                                    ? `translate3d(${timerPosition.x}px, ${timerPosition.y}px, 0)`
+                                    : "none",
+                            willChange: isMobileTimer ? "auto" : "transform",
+                            cursor: isMobileTimer ? "default" : timerDragging ? "grabbing" : "grab",
                             userSelect: "none",
                             zIndex: 20,
                             padding: "18px",
-                            width: "230px",
+                            width: isMobileTimer ? "100%" : "230px",
+                            maxWidth: isMobileTimer ? "420px" : "230px",
+                            margin: isMobileTimer ? "12px auto 18px" : undefined,
                             textAlign: "center",
                             border: "1px solid rgba(148, 163, 184, 0.18)",
                             transition: timerDragging ? "none" : "box-shadow 0.2s ease, border-color 0.2s ease",
