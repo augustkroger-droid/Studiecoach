@@ -1545,10 +1545,11 @@ export default function KalenderPage() {
                         bottom: isMobileCalendar ? "auto" : "20px",
                         transform: isMobileCalendar ? "none" : "translateX(-50%)",
                         width: isMobileCalendar
-                            ? "100%"
+                            ? "calc(100vw - 32px)"
                             : isAssignedBoxMinimized
                                 ? "210px"
                                 : "330px",
+                        minWidth: isMobileCalendar ? "calc(100vw - 32px)" : undefined,
                         maxHeight: isMobileCalendar
                             ? isAssignedBoxMinimized
                                 ? "64px"
