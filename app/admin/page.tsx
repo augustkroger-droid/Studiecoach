@@ -1202,17 +1202,6 @@ export default function AdminPage() {
                                         Lås användarens möjlighet att byta namn
                                     </label>
 
-                                    {selectedProfile.role === "teacher" || selectedProfile.is_admin ? (
-                                        <button
-                                            onClick={() => openTeacherAccessEditor(selectedProfile)}
-                                            style={{
-                                                ...primaryButtonStyle,
-                                                marginTop: "18px",
-                                            }}
-                                        >
-                                            Hantera elevåtkomst
-                                        </button>
-                                    ) : null}
 
                                     <div
                                         style={{
