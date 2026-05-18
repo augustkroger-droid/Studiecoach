@@ -15,7 +15,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Studiecoach",
   description:
-    "En app som hjälper dig att plannera dina studier och plugga effektivt",
+    "En app som hjälper dig att planera dina studier och plugga effektivt",
+  manifest: "/manifest.json",
+  themeColor: "#020617",
+  appleWebApp: {
+    capable: true,
+    title: "Studiecoach",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({

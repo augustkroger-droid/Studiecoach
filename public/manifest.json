@@ -1,0 +1,23 @@
+{
+    "name": "Studiecoach",
+    "short_name": "Studiecoach",
+    "description": "En app som hjälper dig att planera dina studier och plugga effektivt",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "background_color": "#020617",
+    "theme_color": "#020617",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "/favicon.ico",
+            "sizes": "192x192",
+            "type": "image/x-icon"
+        },
+        {
+            "src": "/favicon.ico",
+            "sizes": "512x512",
+            "type": "image/x-icon"
+        }
+    ]
+}
