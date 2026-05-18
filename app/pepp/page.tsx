@@ -536,26 +536,18 @@ function PeppPageContent() {
             return;
         }
 
-        if (existingReaction) {
-            const { error: deleteError } = await supabase
-                .from("post_likes")
-                .delete()
-                .eq("post_id", postId)
-                .eq("user_id", userId);
-
-            if (deleteError) {
-                alert(deleteError.message);
-                return;
-            }
-        }
-
         const { data, error } = await supabase
             .from("post_likes")
-            .insert({
-                post_id: postId,
-                user_id: userId,
-                reaction,
-            })
+            .upsert(
+                {
+                    post_id: postId,
+                    user_id: userId,
+                    reaction,
+                },
+                {
+                    onConflict: "post_id,user_id",
+                }
+            )
             .select()
             .single();
 
