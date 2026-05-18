@@ -198,6 +198,12 @@ export default function PassPage() {
     const [breakSecondsLeft, setBreakSecondsLeft] = useState(BREAK_SECONDS);
     const [breakDone, setBreakDone] = useState(false);
     const [timerMinimized, setTimerMinimized] = useState(false);
+    const [timerPosition, setTimerPosition] = useState<{ x: number; y: number } | null>(null);
+    const [timerReady, setTimerReady] = useState(false);
+    const [timerDragging, setTimerDragging] = useState(false);
+    const timerCardRef = useRef<HTMLDivElement | null>(null);
+    const timerDragOffsetRef = useRef({ x: 0, y: 0 });
+    const timerLatestPositionRef = useRef({ x: 0, y: 100 });
 
     const canEditTime = isEditMode && !["active", "paused", "done"].includes(sessionStatus);
 
@@ -283,6 +289,37 @@ export default function PassPage() {
 
         return () => clearInterval(interval);
     }, [showBreakModal, breakDone]);
+
+    useEffect(() => {
+        if (!timerDragging) return;
+
+        function handleMouseMove(event: MouseEvent) {
+            const nextPosition = {
+                x: event.clientX - timerDragOffsetRef.current.x,
+                y: event.clientY - timerDragOffsetRef.current.y,
+            };
+
+            timerLatestPositionRef.current = nextPosition;
+
+            if (timerCardRef.current) {
+                timerCardRef.current.style.transform =
+                    `translate3d(${nextPosition.x}px, ${nextPosition.y}px, 0)`;
+            }
+        }
+
+        function handleMouseUp() {
+            setTimerPosition(timerLatestPositionRef.current);
+            setTimerDragging(false);
+        }
+
+        window.addEventListener("mousemove", handleMouseMove);
+        window.addEventListener("mouseup", handleMouseUp);
+
+        return () => {
+            window.removeEventListener("mousemove", handleMouseMove);
+            window.removeEventListener("mouseup", handleMouseUp);
+        };
+    }, [timerDragging]);
 
     useEffect(() => {
         if (!isRunning || !id) return;
@@ -1188,19 +1225,53 @@ export default function PassPage() {
 
                 {isStudyMode && (
                     <div
+                        ref={timerCardRef}
                         className="pass-timer-card"
+                        onMouseDown={(event) => {
+                            const rect = event.currentTarget.getBoundingClientRect();
+
+                            const currentPosition = {
+                                x: rect.left,
+                                y: rect.top,
+                            };
+
+                            timerLatestPositionRef.current = currentPosition;
+
+                            event.currentTarget.style.top = "0px";
+                            event.currentTarget.style.right = "auto";
+                            event.currentTarget.style.left = "0px";
+                            event.currentTarget.style.transform =
+                                `translate3d(${currentPosition.x}px, ${currentPosition.y}px, 0)`;
+
+                            setTimerPosition(currentPosition);
+
+                            timerDragOffsetRef.current = {
+                                x: event.clientX - rect.left,
+                                y: event.clientY - rect.top,
+                            };
+
+                            setTimerDragging(true);
+                        }}
                         style={{
                             background: "rgba(15, 23, 42, 0.92)",
                             borderRadius: "18px",
                             boxShadow: "0 10px 25px rgba(0,0,0,0.28)",
-                            position: "absolute",
-                            top: "100px",
-                            right: "32px",
+                            position: "fixed",
+                            top: timerPosition ? 0 : "100px",
+                            right: timerPosition ? "auto" : "32px",
+                            left: timerPosition ? 0 : "auto",
+                            transform: timerPosition
+                                ? `translate3d(${timerPosition.x}px, ${timerPosition.y}px, 0)`
+                                : "none",
+                            willChange: "transform",
+                            cursor: timerDragging ? "grabbing" : "grab",
+                            userSelect: "none",
+                            zIndex: 20,
                             padding: "18px",
                             width: "230px",
                             textAlign: "center",
                             border: "1px solid rgba(148, 163, 184, 0.18)",
-                            transition: "0.2s ease",
+                            transition: timerDragging ? "none" : "box-shadow 0.2s ease, border-color 0.2s ease",
                         }}
                     >
                         <div
