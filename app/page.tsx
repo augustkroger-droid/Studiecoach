@@ -53,6 +53,7 @@ type UserProfile = {
   id: string;
   username: string;
   show_on_leaderboard?: boolean;
+  hide_leaderboard?: boolean;
   is_admin?: boolean;
   role?: "student" | "teacher" | "admin" | null;
 };
@@ -114,6 +115,7 @@ export default function Home() {
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
+  const [hideLeaderboard, setHideLeaderboard] = useState(false);
   const [loading, setLoading] = useState(true);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [announcementText, setAnnouncementText] = useState("");
@@ -135,12 +137,13 @@ export default function Home() {
 
     const { data: profileData } = await supabase
       .from("profiles")
-      .select("id, username, show_on_leaderboard, is_admin, role")
+      .select("id, username, show_on_leaderboard, hide_leaderboard, is_admin, role")
       .eq("id", user.id)
       .single();
 
     setMyProfile(profileData);
     setUsername(profileData?.username || "Elev");
+    setHideLeaderboard(profileData?.hide_leaderboard ?? false);
 
     const isAdmin = profileData?.is_admin === true || profileData?.role === "admin";
     const isTeacher = profileData?.role === "teacher" || isAdmin;
@@ -226,7 +229,7 @@ export default function Home() {
 
     let profileQuery = supabase
       .from("profiles")
-      .select("id, username, show_on_leaderboard, is_admin");
+      .select("id, username, show_on_leaderboard, hide_leaderboard, is_admin")
 
     if (!isAdmin) {
       profileQuery = profileQuery.in("id", visibleUserIds);
@@ -337,6 +340,22 @@ export default function Home() {
     })
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
+
+  async function toggleHideLeaderboard() {
+    const nextValue = !hideLeaderboard;
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ hide_leaderboard: nextValue })
+      .eq("id", userId);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setHideLeaderboard(nextValue);
+  }
 
   return (
     <main
@@ -612,24 +631,66 @@ export default function Home() {
           }}
         >
           <section style={cardStyle(theme)}>
-            <h2 style={{ marginTop: 0 }}>🏆 Veckans topp 3</h2>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "12px",
+                marginBottom: hideLeaderboard ? 0 : "14px",
+              }}
+            >
+              <h2 style={{ margin: 0 }}>🏆 Veckans topp 3</h2>
 
-            {leaderboard.length === 0 ? (
-              <p style={{ color: "#94a3b8" }}>
-                Ingen deltar i topplistan ännu.
+              <button
+                onClick={toggleHideLeaderboard}
+                type="button"
+                title={hideLeaderboard ? "Visa topplistan" : "Dölj topplistan"}
+                style={{
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "999px",
+                  border: `1px solid ${theme.border}`,
+                  background: "rgba(255,255,255,0.08)",
+                  color: theme.text,
+                  cursor: "pointer",
+                  fontWeight: 900,
+                  fontSize: "20px",
+                  lineHeight: 1,
+                }}
+              >
+                {hideLeaderboard ? "+" : "−"}
+              </button>
+            </div>
+
+            {!hideLeaderboard && (
+              <>
+
+                {leaderboard.length === 0 ? (
+                  <p style={{ color: "#94a3b8" }}>
+                    Ingen deltar i topplistan ännu.
+                  </p>
+                ) : (
+                  leaderboard.map(([id, minutes], index) => (
+                    <div key={id} style={leaderboardRowStyle}>
+                      <strong>
+                        {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"}{" "}
+                        {getUsername(id)}
+                      </strong>
+                      <span>{formatTime(minutes)}</span>
+                    </div>
+                  ))
+                )}
+              </>
+            )}
+
+            {hideLeaderboard && (
+              <p style={{ color: "#94a3b8", margin: "12px 0 0" }}>
+                Topplistan är dold. Klicka på + för att visa den igen.
               </p>
-            ) : (
-              leaderboard.map(([id, minutes], index) => (
-                <div key={id} style={leaderboardRowStyle}>
-                  <strong>
-                    {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"}{" "}
-                    {getUsername(id)}
-                  </strong>
-                  <span>{formatTime(minutes)}</span>
-                </div>
-              ))
             )}
           </section>
+
           <section style={cardStyle(theme)}>
             <h2 style={{ marginTop: 0 }}>📢 Uppdateringar</h2>
 

@@ -11,6 +11,7 @@ type Profile = {
     id: string;
     username: string;
     show_on_leaderboard?: boolean;
+    hide_leaderboard?: boolean;
     is_admin?: boolean;
     role?: "student" | "teacher" | "admin" | null;
 };
@@ -119,6 +120,7 @@ function PeppPageContent() {
     const [userId, setUserId] = useState("");
     const [myProfile, setMyProfile] = useState<Profile | null>(null);
     const [showOnLeaderboard, setShowOnLeaderboard] = useState(true);
+    const [hideLeaderboard, setHideLeaderboard] = useState(false);
 
     const [posts, setPosts] = useState<StudyPost[]>([]);
     const [likes, setLikes] = useState<Like[]>([]);
@@ -183,12 +185,13 @@ function PeppPageContent() {
 
         const { data: profileData } = await supabase
             .from("profiles")
-            .select("id, username, show_on_leaderboard, is_admin, role")
+            .select("id, username, show_on_leaderboard, hide_leaderboard, is_admin, role")
             .eq("id", user.id)
             .single();
 
         setMyProfile(profileData);
         setShowOnLeaderboard(profileData?.show_on_leaderboard ?? false);
+        setHideLeaderboard(profileData?.hide_leaderboard ?? false);
 
         const isAdmin = profileData?.is_admin === true || profileData?.role === "admin";
         const isTeacher = profileData?.role === "teacher" || isAdmin;
@@ -319,7 +322,7 @@ function PeppPageContent() {
     async function loadProfiles(isAdmin: boolean, userIds: string[]) {
         const profileQuery = supabase
             .from("profiles")
-            .select("id, username, show_on_leaderboard, is_admin, role");
+            .select("id, username, show_on_leaderboard, hide_leaderboard, is_admin, role")
 
         const { data, error } = isAdmin
             ? await profileQuery
@@ -646,6 +649,22 @@ function PeppPageContent() {
         }
 
         setShowOnLeaderboard(nextValue);
+    }
+
+    async function toggleHideLeaderboard() {
+        const nextValue = !hideLeaderboard;
+
+        const { error } = await supabase
+            .from("profiles")
+            .update({ hide_leaderboard: nextValue })
+            .eq("id", userId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setHideLeaderboard(nextValue);
     }
 
     async function createNotification({
@@ -1287,64 +1306,105 @@ function PeppPageContent() {
 
                 <aside style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
                     <section style={cardStyle(theme)}>
-                        <h2 style={{ marginTop: 0 }}>🏆 Veckans topp 3</h2>
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                gap: "12px",
+                                marginBottom: hideLeaderboard ? 0 : "14px",
+                            }}
+                        >
+                            <h2 style={{ margin: 0 }}>🏆 Veckans topp 3</h2>
 
-
-                        {leaderboard.length === 0 ? (
-                            <p style={{ color: "#94a3b8" }}>Ingen har postat pass denna vecka.</p>
-                        ) : (
-                            leaderboard.map(([id, minutes], index) => (
-                                <div key={id} style={leaderboardRowStyle}>
-                                    <strong>
-                                        {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"} {getUsername(id)}
-                                    </strong>
-                                    <span>{formatHours(minutes)}</span>
-                                </div>
-                            ))
-
-                        )}
-                        {myLeaderboardIndex !== -1 && (
-                            <div
+                            <button
+                                onClick={toggleHideLeaderboard}
+                                type="button"
+                                title={hideLeaderboard ? "Visa topplistan" : "Dölj topplistan"}
                                 style={{
-                                    marginTop: "12px",
-                                    padding: "12px",
-                                    borderRadius: "12px",
-                                    background: "rgba(37, 99, 235, 0.14)",
-                                    border: "1px solid rgba(96, 165, 250, 0.35)",
+                                    width: "36px",
+                                    height: "36px",
+                                    borderRadius: "999px",
+                                    border: `1px solid ${theme.border}`,
+                                    background: "rgba(255,255,255,0.08)",
+                                    color: theme.text,
+                                    cursor: "pointer",
+                                    fontWeight: 900,
+                                    fontSize: "20px",
+                                    lineHeight: 1,
                                 }}
                             >
-                                <strong>Din placering: #{myLeaderboardIndex + 1}</strong>
+                                {hideLeaderboard ? "+" : "−"}
+                            </button>
+                        </div>
 
-                                <div style={{ color: "#94a3b8", marginTop: "4px" }}>
-                                    {formatHours(myLeaderboardMinutes)}
-                                </div>
+                        {!hideLeaderboard && (
+                            <>
 
-                                <label
-                                    style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "10px",
-                                        marginTop: "14px",
-                                        color: "#cbd5e1",
-                                        fontWeight: "bold",
-                                        cursor: "pointer",
-                                        fontSize: "14px",
-                                    }}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={showOnLeaderboard}
-                                        onChange={toggleLeaderboardVisibility}
+
+                                {leaderboard.length === 0 ? (
+                                    <p style={{ color: "#94a3b8" }}>Ingen har postat pass denna vecka.</p>
+                                ) : (
+                                    leaderboard.map(([id, minutes], index) => (
+                                        <div key={id} style={leaderboardRowStyle}>
+                                            <strong>
+                                                {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"} {getUsername(id)}
+                                            </strong>
+                                            <span>{formatHours(minutes)}</span>
+                                        </div>
+                                    ))
+
+                                )}
+                                {myLeaderboardIndex !== -1 && (
+                                    <div
                                         style={{
-                                            width: "16px",
-                                            height: "16px",
-                                            cursor: "pointer",
+                                            marginTop: "12px",
+                                            padding: "12px",
+                                            borderRadius: "12px",
+                                            background: "rgba(37, 99, 235, 0.14)",
+                                            border: "1px solid rgba(96, 165, 250, 0.35)",
                                         }}
-                                    />
+                                    >
+                                        <strong>Din placering: #{myLeaderboardIndex + 1}</strong>
 
-                                    Delta i topplistan
-                                </label>
-                            </div>
+                                        <div style={{ color: "#94a3b8", marginTop: "4px" }}>
+                                            {formatHours(myLeaderboardMinutes)}
+                                        </div>
+
+                                        <label
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "10px",
+                                                marginTop: "14px",
+                                                color: "#cbd5e1",
+                                                fontWeight: "bold",
+                                                cursor: "pointer",
+                                                fontSize: "14px",
+                                            }}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={showOnLeaderboard}
+                                                onChange={toggleLeaderboardVisibility}
+                                                style={{
+                                                    width: "16px",
+                                                    height: "16px",
+                                                    cursor: "pointer",
+                                                }}
+                                            />
+
+                                            Delta i topplistan
+                                        </label>
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {hideLeaderboard && (
+                            <p style={{ color: "#94a3b8", margin: "12px 0 0" }}>
+                                Topplistan är dold. Klicka på + för att visa den igen.
+                            </p>
                         )}
                     </section>
 
