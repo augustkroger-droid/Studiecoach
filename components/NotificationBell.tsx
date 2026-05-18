@@ -244,7 +244,13 @@ export default function NotificationBell() {
                                         </div>
 
                                         <div style={{ minWidth: 0 }}>
-                                            <strong style={{ display: "block", lineHeight: 1.35 }}>
+                                            <strong
+                                                style={{
+                                                    display: "block",
+                                                    lineHeight: 1.45,
+                                                    whiteSpace: "pre-wrap",
+                                                }}
+                                            >
                                                 {notification.message}
                                             </strong>
 

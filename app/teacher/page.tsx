@@ -301,13 +301,21 @@ export default function TeacherPage() {
             return;
         }
 
+        const { data: teacherProfile } = await supabase
+            .from("profiles")
+            .select("username")
+            .eq("id", user.id)
+            .single();
+
+        const teacherName = teacherProfile?.username || "Din lärare";
+
         const notificationRows = selectedStudentIdsForNotification.map((studentId) => ({
             user_id: studentId,
             actor_id: user.id,
             post_id: null,
             assigned_study_template_id: null,
             type: "teacher_message",
-            message: text,
+            message: `📣 ${teacherName}:\n${text}`,
             read: false,
         }));
 
