@@ -1345,10 +1345,13 @@ export default function KalenderPage() {
             <div
                 className="calendar-floating-panels"
                 style={{
-                    position: "fixed",
-                    left: "20px",
-                    bottom: "20px",
+                    position: isMobileCalendar ? "static" : "fixed",
+                    left: isMobileCalendar ? "auto" : "20px",
+                    bottom: isMobileCalendar ? "auto" : "20px",
                     zIndex: 20,
+                    marginTop: isMobileCalendar ? "20px" : 0,
+                    display: isMobileCalendar ? "grid" : "block",
+                    gap: isMobileCalendar ? "14px" : 0,
                 }}
             >
                 <section
@@ -1536,13 +1539,13 @@ export default function KalenderPage() {
                         }
                     }}
                     style={{
-                        position: "fixed",
-                        left: isMobileCalendar ? "12px" : "50%",
-                        right: isMobileCalendar ? "12px" : "auto",
-                        bottom: isMobileCalendar ? "12px" : "20px",
+                        position: isMobileCalendar ? "static" : "fixed",
+                        left: isMobileCalendar ? "auto" : "50%",
+                        right: isMobileCalendar ? "auto" : "auto",
+                        bottom: isMobileCalendar ? "auto" : "20px",
                         transform: isMobileCalendar ? "none" : "translateX(-50%)",
                         width: isMobileCalendar
-                            ? "auto"
+                            ? "100%"
                             : isAssignedBoxMinimized
                                 ? "210px"
                                 : "330px",
