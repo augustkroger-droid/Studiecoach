@@ -93,6 +93,11 @@ export default function TeacherPage() {
     const [sessions, setSessions] = useState<StudySession[]>([]);
     const [posts, setPosts] = useState<StudyPost[]>([]);
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+    const [showNotificationModal, setShowNotificationModal] = useState(false);
+    const [notificationText, setNotificationText] = useState("");
+    const [selectedStudentIdsForNotification, setSelectedStudentIdsForNotification] = useState<string[]>([]);
+    const [openNotificationClassIds, setOpenNotificationClassIds] = useState<string[]>([]);
+    const [notificationOtherUsersOpen, setNotificationOtherUsersOpen] = useState(false);
     const [openClassIds, setOpenClassIds] = useState<string[]>([]);
 
     useEffect(() => {
@@ -227,6 +232,96 @@ export default function TeacherPage() {
                 ? current.filter((id) => id !== classId)
                 : [...current, classId]
         );
+    }
+
+    function openSendNotification() {
+        setShowNotificationModal(true);
+        setNotificationText("");
+        setSelectedStudentIdsForNotification([]);
+        setOpenNotificationClassIds([]);
+        setNotificationOtherUsersOpen(false);
+    }
+
+    function closeSendNotification() {
+        setShowNotificationModal(false);
+        setNotificationText("");
+        setSelectedStudentIdsForNotification([]);
+        setOpenNotificationClassIds([]);
+        setNotificationOtherUsersOpen(false);
+    }
+
+    function toggleStudentForNotification(studentId: string) {
+        setSelectedStudentIdsForNotification((current) =>
+            current.includes(studentId)
+                ? current.filter((id) => id !== studentId)
+                : [...current, studentId]
+        );
+    }
+
+    function toggleNotificationClassOpen(classId: string) {
+        setOpenNotificationClassIds((current) =>
+            current.includes(classId)
+                ? current.filter((id) => id !== classId)
+                : [...current, classId]
+        );
+    }
+
+    function toggleAllStudentsForNotification(studentIds: string[]) {
+        const allSelected = studentIds.every((studentId) =>
+            selectedStudentIdsForNotification.includes(studentId)
+        );
+
+        setSelectedStudentIdsForNotification((current) => {
+            if (allSelected) {
+                return current.filter((studentId) => !studentIds.includes(studentId));
+            }
+
+            return Array.from(new Set([...current, ...studentIds]));
+        });
+    }
+
+    async function sendNotificationToStudents() {
+        const text = notificationText.trim();
+
+        if (!text) {
+            alert("Skriv en notis först.");
+            return;
+        }
+
+        if (selectedStudentIdsForNotification.length === 0) {
+            alert("Välj minst en elev.");
+            return;
+        }
+
+        const { data: userData } = await supabase.auth.getUser();
+        const user = userData.user;
+
+        if (!user) {
+            window.location.href = "/login";
+            return;
+        }
+
+        const notificationRows = selectedStudentIdsForNotification.map((studentId) => ({
+            user_id: studentId,
+            actor_id: user.id,
+            post_id: null,
+            assigned_study_template_id: null,
+            type: "teacher_message",
+            message: text,
+            read: false,
+        }));
+
+        const { error } = await supabase
+            .from("notifications")
+            .insert(notificationRows);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        alert(`Notisen skickades till ${selectedStudentIdsForNotification.length} elev(er).`);
+        closeSendNotification();
     }
 
     function getUsername(userId: string) {
@@ -423,10 +518,26 @@ export default function TeacherPage() {
             <NavBar />
             <ThemePicker themeKey={themeKey} setThemeKey={setThemeKey} />
 
-            <h1>👩‍🏫 Lärarsida</h1>
-            <p style={{ color: "#94a3b8" }}>
-                Här ser du de mappar och elever som en admin har delat med dig.
-            </p>
+            <div
+                style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: "16px",
+                    flexWrap: "wrap",
+                }}
+            >
+                <div>
+                    <h1>👩‍🏫 Lärarsida</h1>
+                    <p style={{ color: "#94a3b8" }}>
+                        Här ser du de mappar och elever som en admin har delat med dig.
+                    </p>
+                </div>
+
+                <button onClick={openSendNotification} style={primaryButtonStyle}>
+                    📣 Skicka notis
+                </button>
+            </div>
 
             <section style={teacherLayoutStyle}>
                 <section style={cardStyle}>
@@ -728,6 +839,25 @@ export default function TeacherPage() {
                     )}
                 </section>
             </section>
+            {showNotificationModal && (
+                <SendNotificationModal
+                    classes={classes}
+                    classStudents={classStudents}
+                    profiles={profiles}
+                    ungroupedStudents={ungroupedStudents}
+                    notificationText={notificationText}
+                    setNotificationText={setNotificationText}
+                    selectedStudentIds={selectedStudentIdsForNotification}
+                    openClassIds={openNotificationClassIds}
+                    otherUsersOpen={notificationOtherUsersOpen}
+                    setOtherUsersOpen={setNotificationOtherUsersOpen}
+                    closeModal={closeSendNotification}
+                    toggleClassOpen={toggleNotificationClassOpen}
+                    toggleStudent={toggleStudentForNotification}
+                    toggleAllStudents={toggleAllStudentsForNotification}
+                    sendNotification={sendNotificationToStudents}
+                />
+            )}
         </main>
     );
 }
@@ -804,6 +934,335 @@ function PostCard({ post, username }: { post: StudyPost; username: string }) {
                 {formatDate(post.date)}
             </div>
         </article>
+    );
+}
+
+function SendNotificationModal({
+    classes,
+    classStudents,
+    profiles,
+    ungroupedStudents,
+    notificationText,
+    setNotificationText,
+    selectedStudentIds,
+    openClassIds,
+    otherUsersOpen,
+    setOtherUsersOpen,
+    closeModal,
+    toggleClassOpen,
+    toggleStudent,
+    toggleAllStudents,
+    sendNotification,
+}: any) {
+    return (
+        <div
+            onClick={closeModal}
+            style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.62)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 80,
+                padding: "18px",
+            }}
+        >
+            <div
+                onClick={(event) => event.stopPropagation()}
+                style={{
+                    width: "640px",
+                    maxWidth: "100%",
+                    maxHeight: "84vh",
+                    overflowY: "auto",
+                    background: "#0f172a",
+                    border: "1px solid rgba(148, 163, 184, 0.25)",
+                    borderRadius: "22px",
+                    padding: "22px",
+                    boxShadow: "0 24px 80px rgba(0,0,0,0.55)",
+                    color: "#e2e8f0",
+                }}
+            >
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        gap: "14px",
+                        marginBottom: "16px",
+                    }}
+                >
+                    <div>
+                        <h2 style={{ margin: 0 }}>📣 Skicka notis</h2>
+                        <p style={{ margin: "6px 0 0", color: "#94a3b8" }}>
+                            Skicka ett meddelande till markerade elever.
+                        </p>
+                    </div>
+
+                    <button
+                        onClick={closeModal}
+                        style={{
+                            width: "38px",
+                            height: "38px",
+                            borderRadius: "999px",
+                            border: "1px solid rgba(148, 163, 184, 0.25)",
+                            background: "rgba(30, 41, 59, 0.72)",
+                            color: "#e2e8f0",
+                            cursor: "pointer",
+                            fontSize: "20px",
+                        }}
+                    >
+                        ×
+                    </button>
+                </div>
+
+                <textarea
+                    value={notificationText}
+                    onChange={(event) => setNotificationText(event.target.value)}
+                    placeholder="Skriv notisen här..."
+                    rows={4}
+                    style={{
+                        width: "100%",
+                        padding: "13px",
+                        borderRadius: "14px",
+                        border: "1px solid rgba(148, 163, 184, 0.35)",
+                        background: "rgba(2, 6, 23, 0.75)",
+                        color: "#e2e8f0",
+                        resize: "vertical",
+                        boxSizing: "border-box",
+                        fontFamily: "inherit",
+                        marginBottom: "16px",
+                    }}
+                />
+
+                <div style={{ display: "grid", gap: "12px" }}>
+                    {classes.map((classItem: any) => {
+                        const studentsInClass = classStudents
+                            .filter((row: any) => row.class_id === classItem.id)
+                            .map((row: any) =>
+                                profiles.find((profile: any) => profile.id === row.student_id)
+                            )
+                            .filter(Boolean);
+
+                        const isOpen = openClassIds.includes(classItem.id);
+                        const allSelected =
+                            studentsInClass.length > 0 &&
+                            studentsInClass.every((student: any) =>
+                                selectedStudentIds.includes(student.id)
+                            );
+
+                        return (
+                            <div
+                                key={classItem.id}
+                                style={{
+                                    padding: "13px",
+                                    borderRadius: "16px",
+                                    background: "rgba(15, 23, 42, 0.72)",
+                                    border: "1px solid rgba(148, 163, 184, 0.18)",
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        gap: "10px",
+                                        alignItems: "center",
+                                    }}
+                                >
+                                    <button
+                                        onClick={() => toggleClassOpen(classItem.id)}
+                                        style={{
+                                            border: "none",
+                                            background: "transparent",
+                                            color: "#e2e8f0",
+                                            cursor: "pointer",
+                                            fontWeight: "bold",
+                                            fontSize: "16px",
+                                        }}
+                                    >
+                                        {isOpen ? "📂" : "📁"} {classItem.name}{" "}
+                                        <span style={{ color: "#94a3b8" }}>
+                                            ({studentsInClass.length})
+                                        </span>
+                                    </button>
+
+                                    <button
+                                        onClick={() =>
+                                            toggleAllStudents(
+                                                studentsInClass.map((student: any) => student.id)
+                                            )
+                                        }
+                                        style={{
+                                            padding: "8px 10px",
+                                            borderRadius: "10px",
+                                            border: "1px solid rgba(148, 163, 184, 0.3)",
+                                            background: allSelected
+                                                ? "rgba(37, 99, 235, 0.8)"
+                                                : "rgba(255,255,255,0.08)",
+                                            color: "#e2e8f0",
+                                            cursor: "pointer",
+                                            fontWeight: "bold",
+                                        }}
+                                    >
+                                        {allSelected ? "Avmarkera alla" : "Markera alla"}
+                                    </button>
+                                </div>
+
+                                {isOpen && (
+                                    <div style={{ display: "grid", gap: "8px", marginTop: "12px" }}>
+                                        {studentsInClass.map((student: any) => (
+                                            <label
+                                                key={student.id}
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: "10px",
+                                                    padding: "10px",
+                                                    borderRadius: "12px",
+                                                    background: selectedStudentIds.includes(student.id)
+                                                        ? "rgba(37, 99, 235, 0.22)"
+                                                        : "rgba(2, 6, 23, 0.45)",
+                                                    border: selectedStudentIds.includes(student.id)
+                                                        ? "1px solid rgba(96, 165, 250, 0.55)"
+                                                        : "1px solid rgba(148, 163, 184, 0.14)",
+                                                    cursor: "pointer",
+                                                    fontWeight: "bold",
+                                                }}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedStudentIds.includes(student.id)}
+                                                    onChange={() => toggleStudent(student.id)}
+                                                />
+                                                {student.username || "Elev utan namn"}
+                                            </label>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+
+                    {ungroupedStudents.length > 0 && (
+                        <div
+                            style={{
+                                padding: "13px",
+                                borderRadius: "16px",
+                                background: "rgba(15, 23, 42, 0.72)",
+                                border: "1px solid rgba(148, 163, 184, 0.18)",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    gap: "10px",
+                                    alignItems: "center",
+                                }}
+                            >
+                                <button
+                                    onClick={() => setOtherUsersOpen(!otherUsersOpen)}
+                                    style={{
+                                        border: "none",
+                                        background: "transparent",
+                                        color: "#e2e8f0",
+                                        cursor: "pointer",
+                                        fontWeight: "bold",
+                                        fontSize: "16px",
+                                    }}
+                                >
+                                    {otherUsersOpen ? "📂" : "📁"} Övriga elever{" "}
+                                    <span style={{ color: "#94a3b8" }}>
+                                        ({ungroupedStudents.length})
+                                    </span>
+                                </button>
+
+                                <button
+                                    onClick={() =>
+                                        toggleAllStudents(
+                                            ungroupedStudents.map((student: any) => student.id)
+                                        )
+                                    }
+                                    style={{
+                                        padding: "8px 10px",
+                                        borderRadius: "10px",
+                                        border: "1px solid rgba(148, 163, 184, 0.3)",
+                                        background: "rgba(255,255,255,0.08)",
+                                        color: "#e2e8f0",
+                                        cursor: "pointer",
+                                        fontWeight: "bold",
+                                    }}
+                                >
+                                    Markera alla
+                                </button>
+                            </div>
+
+                            {otherUsersOpen && (
+                                <div style={{ display: "grid", gap: "8px", marginTop: "12px" }}>
+                                    {ungroupedStudents.map((student: any) => (
+                                        <label
+                                            key={student.id}
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "10px",
+                                                padding: "10px",
+                                                borderRadius: "12px",
+                                                background: selectedStudentIds.includes(student.id)
+                                                    ? "rgba(37, 99, 235, 0.22)"
+                                                    : "rgba(2, 6, 23, 0.45)",
+                                                border: selectedStudentIds.includes(student.id)
+                                                    ? "1px solid rgba(96, 165, 250, 0.55)"
+                                                    : "1px solid rgba(148, 163, 184, 0.14)",
+                                                cursor: "pointer",
+                                                fontWeight: "bold",
+                                            }}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedStudentIds.includes(student.id)}
+                                                onChange={() => toggleStudent(student.id)}
+                                            />
+                                            {student.username || "Elev utan namn"}
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                        alignItems: "center",
+                        marginTop: "18px",
+                        flexWrap: "wrap",
+                    }}
+                >
+                    <strong style={{ color: "#93c5fd" }}>
+                        {selectedStudentIds.length} elev(er) valda
+                    </strong>
+
+                    <button
+                        onClick={sendNotification}
+                        style={{
+                            padding: "12px 16px",
+                            borderRadius: "12px",
+                            border: "none",
+                            background: "#2563eb",
+                            color: "white",
+                            fontWeight: "bold",
+                            cursor: "pointer",
+                        }}
+                    >
+                        Skicka notis
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }
 

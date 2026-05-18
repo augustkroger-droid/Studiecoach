@@ -11,7 +11,7 @@ type Notification = {
     actor_id: string;
     post_id: string | null;
     assigned_study_template_id: string | null;
-    type: "like" | "comment" | "study_template";
+    type: "like" | "comment" | "study_template" | "teacher_message";
     message: string;
     read: boolean;
     created_at: string;
@@ -77,6 +77,11 @@ export default function NotificationBell() {
 
         if (notification.type === "study_template") {
             router.push("/kalender?open=assigned-pass");
+            return;
+        }
+
+        if (notification.type === "teacher_message") {
+            loadNotifications();
             return;
         }
 
@@ -233,7 +238,9 @@ export default function NotificationBell() {
                                                 ? "❤️"
                                                 : notification.type === "comment"
                                                     ? "💬"
-                                                    : "📚"}
+                                                    : notification.type === "teacher_message"
+                                                        ? "📣"
+                                                        : "📚"}
                                         </div>
 
                                         <div style={{ minWidth: 0 }}>

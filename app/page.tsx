@@ -484,7 +484,7 @@ export default function Home() {
                       Påbörja studiepass →
                     </Link>
                   ) : (
-                    <Link href="/kalender" style={primaryLinkStyle(theme)}>
+                    <Link href={`/kalender?date=${nextSession.date}`} style={primaryLinkStyle(theme)}>
                       Se i kalendern →
                     </Link>
                   )}
@@ -526,7 +526,7 @@ export default function Home() {
                     {daysUntil(nextExam.date)} dagar kvar
                   </p>
 
-                  <Link href="/kalender" style={primaryLinkStyle(theme)}>
+                  <Link href={`/kalender?date=${nextExam.date}`} style={primaryLinkStyle(theme)}>
                     Se i kalendern →
                   </Link>
                 </>

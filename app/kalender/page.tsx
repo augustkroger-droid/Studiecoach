@@ -70,6 +70,32 @@ function getStartOfWeek(offset: number) {
     return monday;
 }
 
+function parseLocalDate(dateString: string) {
+    const [year, month, day] = dateString.split("-").map(Number);
+    return new Date(year, month - 1, day);
+}
+
+function getMondayFromDate(date: Date) {
+    const day = date.getDay();
+    const diff = (day === 0 ? -6 : 1) - day;
+
+    const monday = new Date(date);
+    monday.setDate(date.getDate() + diff);
+    monday.setHours(0, 0, 0, 0);
+
+    return monday;
+}
+
+function getWeekOffsetFromDate(dateString: string) {
+    const todayWeekStart = getStartOfWeek(0);
+    const targetWeekStart = getMondayFromDate(parseLocalDate(dateString));
+
+    return Math.round(
+        (targetWeekStart.getTime() - todayWeekStart.getTime()) /
+        (7 * 24 * 60 * 60 * 1000)
+    );
+}
+
 function formatDate(date: Date) {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -145,6 +171,17 @@ export default function KalenderPage() {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
+        const date = params.get("date");
+
+        if (!date) return;
+
+        setWeekOffset(getWeekOffsetFromDate(date));
+
+        window.history.replaceState(null, "", "/kalender");
+    }, []);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
         const shouldOpenAssignedPasses = params.get("open") === "assigned-pass";
 
         if (shouldOpenAssignedPasses) {
@@ -164,6 +201,8 @@ export default function KalenderPage() {
             localStorage.getItem("calendarGoalBoxMinimized") === "true"
         );
     }, []);
+
+
 
     function getCurrentWeekStartString() {
         return formatDate(getStartOfWeek(0));
