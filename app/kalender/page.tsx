@@ -141,6 +141,7 @@ export default function KalenderPage() {
     const [isAssignedBoxMinimized, setIsAssignedBoxMinimized] = useState(false);
     const [isExamBoxMinimized, setIsExamBoxMinimized] = useState(false);
     const [isGoalBoxMinimized, setIsGoalBoxMinimized] = useState(false);
+    const [isMobileCalendar, setIsMobileCalendar] = useState(false);
 
     const [examName, setExamName] = useState("");
     const [examDate, setExamDate] = useState("");
@@ -202,6 +203,19 @@ export default function KalenderPage() {
         );
     }, []);
 
+
+    useEffect(() => {
+        function checkMobileCalendar() {
+            setIsMobileCalendar(window.innerWidth <= 768);
+        }
+
+        checkMobileCalendar();
+        window.addEventListener("resize", checkMobileCalendar);
+
+        return () => {
+            window.removeEventListener("resize", checkMobileCalendar);
+        };
+    }, []);
 
 
     function getCurrentWeekStartString() {
@@ -1523,13 +1537,30 @@ export default function KalenderPage() {
                     }}
                     style={{
                         position: "fixed",
-                        left: "50%",
-                        bottom: "20px",
-                        transform: "translateX(-50%)",
-                        width: isAssignedBoxMinimized ? "210px" : "330px",
-                        maxHeight: isAssignedBoxMinimized ? "74px" : "48vh",
+                        left: isMobileCalendar ? "12px" : "50%",
+                        right: isMobileCalendar ? "12px" : "auto",
+                        bottom: isMobileCalendar ? "12px" : "20px",
+                        transform: isMobileCalendar ? "none" : "translateX(-50%)",
+                        width: isMobileCalendar
+                            ? "auto"
+                            : isAssignedBoxMinimized
+                                ? "210px"
+                                : "330px",
+                        maxHeight: isMobileCalendar
+                            ? isAssignedBoxMinimized
+                                ? "64px"
+                                : "42vh"
+                            : isAssignedBoxMinimized
+                                ? "74px"
+                                : "48vh",
                         overflowY: isAssignedBoxMinimized ? "hidden" : "auto",
-                        padding: isAssignedBoxMinimized ? "14px 16px" : "18px",
+                        padding: isMobileCalendar
+                            ? isAssignedBoxMinimized
+                                ? "12px 14px"
+                                : "14px"
+                            : isAssignedBoxMinimized
+                                ? "14px 16px"
+                                : "18px",
                         borderRadius: "22px",
                         background: theme.card,
                         border: `1px solid ${theme.border}`,
