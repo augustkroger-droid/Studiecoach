@@ -270,7 +270,7 @@ function PeppPageContent() {
 
         await Promise.all([
             loadProfiles(isAdmin, Array.from(profileIds)),
-            loadLikes(),
+            loadLikes(visiblePostIds),
             loadComments(),
             loadWeeklyGoal(user.id),
         ]);
@@ -336,10 +336,16 @@ function PeppPageContent() {
         setProfiles(data || []);
     }
 
-    async function loadLikes() {
+    async function loadLikes(postIds: string[]) {
+        if (postIds.length === 0) {
+            setLikes([]);
+            return;
+        }
+
         const { data, error } = await supabase
             .from("post_likes")
-            .select("*");
+            .select("*")
+            .in("post_id", postIds);
 
         if (error) {
             alert(error.message);
@@ -555,9 +561,12 @@ function PeppPageContent() {
             .single();
 
         if (error) {
+            console.error("Kunde inte spara reaktion:", error);
             alert(error.message);
             return;
         }
+
+        console.log("Sparad reaktion:", data);
 
         setLikes((current) => {
             const withoutOld = current.filter(
