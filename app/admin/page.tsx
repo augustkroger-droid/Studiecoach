@@ -84,6 +84,12 @@ function formatDate(dateString: string) {
     return `${day}/${month}/${year}`;
 }
 
+function sortProfilesByUsername(a: Profile, b: Profile) {
+    return (a.username || "zzz").localeCompare(b.username || "zzz", "sv", {
+        sensitivity: "base",
+    });
+}
+
 export default function AdminPage() {
     const [themeKey, setThemeKey] = useState<ThemeKey>("ocean");
 
@@ -213,7 +219,7 @@ export default function AdminPage() {
             alert(teacherStudentAccessError.message);
         }
 
-        setProfiles(profileData || []);
+        setProfiles([...(profileData || [])].sort(sortProfilesByUsername));
 
         const sortedSessionData = ((sessionData || []) as StudySession[]).sort(
             (a, b) => String(b.date).localeCompare(String(a.date))
@@ -821,7 +827,7 @@ export default function AdminPage() {
 
     const sortedProfiles = [...profiles]
         .filter((profile) => !isStudentInAnyClass(profile.id))
-        .sort((a, b) => (a.username || "").localeCompare(b.username || "", "sv"));
+        .sort(sortProfilesByUsername);
 
     const selectedSessions = sessions.filter((session) => session.user_id === selectedUserId);
     const selectedPosts = posts.filter((post) => post.user_id === selectedUserId);
@@ -944,9 +950,17 @@ export default function AdminPage() {
                             <h3 style={{ marginBottom: "10px" }}>Mappar</h3>
 
                             {adminClasses.map((adminClass) => {
-                                const studentsInClass = classStudents.filter(
-                                    (row) => row.class_id === adminClass.id
-                                );
+                                const studentsInClass = classStudents
+                                    .filter((row) => row.class_id === adminClass.id)
+                                    .sort((a, b) => {
+                                        const studentA = profiles.find((profile) => profile.id === a.student_id);
+                                        const studentB = profiles.find((profile) => profile.id === b.student_id);
+
+                                        return sortProfilesByUsername(
+                                            studentA || ({ id: a.student_id, username: null } as Profile),
+                                            studentB || ({ id: b.student_id, username: null } as Profile)
+                                        );
+                                    });
 
                                 return (
                                     <div key={adminClass.id} style={classBoxStyle}>
@@ -1201,7 +1215,6 @@ export default function AdminPage() {
 
                                         Lås användarens möjlighet att byta namn
                                     </label>
-
 
                                     <div
                                         style={{
@@ -1661,9 +1674,17 @@ function TeacherAccessEditorModal({
 
                 <div style={{ display: "grid", gap: "12px" }}>
                     {adminClasses.map((adminClass: AdminClass) => {
-                        const studentRows = classStudents.filter(
-                            (row: AdminClassStudent) => row.class_id === adminClass.id
-                        );
+                        const studentRows = classStudents
+                            .filter((row: AdminClassStudent) => row.class_id === adminClass.id)
+                            .sort((a: AdminClassStudent, b: AdminClassStudent) => {
+                                const studentA = profiles.find((profile: Profile) => profile.id === a.student_id);
+                                const studentB = profiles.find((profile: Profile) => profile.id === b.student_id);
+
+                                return sortProfilesByUsername(
+                                    studentA || ({ id: a.student_id, username: null } as Profile),
+                                    studentB || ({ id: b.student_id, username: null } as Profile)
+                                );
+                            });
 
                         const studentIds = studentRows.map(
                             (row: AdminClassStudent) => row.student_id

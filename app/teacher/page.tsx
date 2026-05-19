@@ -75,6 +75,12 @@ function formatDate(dateString: string) {
     return `${day}/${month}/${year}`;
 }
 
+function sortProfilesByUsername(a: Profile, b: Profile) {
+    return (a.username || "").localeCompare(b.username || "", "sv", {
+        sensitivity: "base",
+    });
+}
+
 export default function TeacherPage() {
     const [themeKey, setThemeKey] = useState<ThemeKey>("ocean");
 
@@ -208,7 +214,7 @@ export default function TeacherPage() {
 
         setClasses(ownClassData || []);
         setClassStudents(ownClassStudentData);
-        setProfiles(profileData);
+        setProfiles([...profileData].sort(sortProfilesByUsername));
         setSessions(sessionData);
         setPosts(postData);
 
@@ -434,7 +440,7 @@ export default function TeacherPage() {
 
     const ungroupedStudents = profiles
         .filter((profile) => !isStudentInTeacherClass(profile.id))
-        .sort((a, b) => (a.username || "").localeCompare(b.username || "", "sv"));
+        .sort(sortProfilesByUsername);
 
     const selectedProfile = profiles.find((profile) => profile.id === selectedUserId) || null;
     const selectedSessions = sessions.filter((session) => session.user_id === selectedUserId);
@@ -563,7 +569,8 @@ export default function TeacherPage() {
                                     .map((row) =>
                                         profiles.find((profile) => profile.id === row.student_id)
                                     )
-                                    .filter(Boolean) as Profile[];
+                                    .filter((profile): profile is Profile => Boolean(profile))
+                                    .sort(sortProfilesByUsername);
 
                                 return (
                                     <div key={classItem.id} style={classBoxStyle}>
@@ -1050,7 +1057,8 @@ function SendNotificationModal({
                             .map((row: any) =>
                                 profiles.find((profile: any) => profile.id === row.student_id)
                             )
-                            .filter(Boolean);
+                            .filter(Boolean)
+                            .sort(sortProfilesByUsername);
 
                         const isOpen = openClassIds.includes(classItem.id);
                         const allSelected =
