@@ -41,6 +41,13 @@ type StudySession = {
     status?: "planned" | "active" | "paused" | "done" | "missed";
 };
 
+type LeaderboardRow = {
+    user_id: string;
+    username: string;
+    total_minutes: number;
+    show_on_leaderboard?: boolean;
+    show_on_global_leaderboard?: boolean;
+};
 type StudyPost = {
     id: string;
     user_id: string;
@@ -156,6 +163,11 @@ function PeppPageContent() {
     const [weeklySessions, setWeeklySessions] = useState<StudySession[]>([]);
     const [globalWeeklySessions, setGlobalWeeklySessions] = useState<StudySession[]>([]);
     const [globalProfiles, setGlobalProfiles] = useState<Profile[]>([]);
+    const [friendLeaderboardRows, setFriendLeaderboardRows] = useState<LeaderboardRow[]>([]);
+    const [globalLeaderboardRows, setGlobalLeaderboardRows] = useState<LeaderboardRow[]>([]);
+    const [myWeeklyMinutes, setMyWeeklyMinutes] = useState(0);
+    const [myFriendRank, setMyFriendRank] = useState<number | null>(null);
+    const [myGlobalRank, setMyGlobalRank] = useState<number | null>(null);
 
     const [searchUsername, setSearchUsername] = useState("");
     const [searchResults, setSearchResults] = useState<Profile[]>([]);
@@ -258,6 +270,11 @@ function PeppPageContent() {
         const loadedGlobalWeeklySessions = await loadGlobalWeeklySessions();
 
         const loadedGlobalPosts = await loadGlobalWeeklyPosts();
+        await loadFriendLeaderboard(user.id);
+        await loadGlobalLeaderboard();
+        await loadMyWeeklyMinutes(user.id);
+        await loadMyFriendRank(user.id);
+        await loadMyGlobalRank(user.id);
 
         const globalProfileIds = Array.from(
             new Set([
@@ -320,6 +337,72 @@ function PeppPageContent() {
 
         setTeacherStudentIds(loadedTeacherStudentIds);
         setLoading(false);
+    }
+
+    async function loadMyFriendRank(currentUserId: string) {
+        const { data, error } = await supabase.rpc("get_my_friend_weekly_rank", {
+            current_user_id: currentUserId,
+        });
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setMyFriendRank(data?.[0]?.rank ?? null);
+    }
+
+    async function loadMyGlobalRank(currentUserId: string) {
+        const { data, error } = await supabase.rpc("get_my_global_weekly_rank", {
+            current_user_id: currentUserId,
+        });
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setMyGlobalRank(data?.[0]?.rank ?? null);
+    }
+
+    async function loadMyWeeklyMinutes(currentUserId: string) {
+        const { data, error } = await supabase.rpc("get_my_weekly_minutes", {
+            current_user_id: currentUserId,
+        });
+
+        if (error) {
+            alert(error.message);
+            return 0;
+        }
+
+        setMyWeeklyMinutes(data || 0);
+        return data || 0;
+    }
+
+    async function loadFriendLeaderboard(currentUserId: string) {
+        const { data, error } = await supabase.rpc("get_friend_weekly_leaderboard", {
+            current_user_id: currentUserId,
+        });
+
+        if (error) {
+            alert(error.message);
+            return [];
+        }
+
+        setFriendLeaderboardRows(data || []);
+        return data || [];
+    }
+
+    async function loadGlobalLeaderboard() {
+        const { data, error } = await supabase.rpc("get_global_weekly_leaderboard");
+
+        if (error) {
+            alert(error.message);
+            return [];
+        }
+
+        setGlobalLeaderboardRows(data || []);
+        return data || [];
     }
 
     async function loadFriendRequests(currentUserId: string) {
@@ -776,10 +859,9 @@ function PeppPageContent() {
     async function toggleLeaderboardVisibility() {
         const nextValue = !showOnLeaderboard;
 
-        const { error } = await supabase
-            .from("profiles")
-            .update({ show_on_leaderboard: nextValue })
-            .eq("id", userId);
+        const { error } = await supabase.rpc("set_my_leaderboard_visibility", {
+            show_value: nextValue,
+        });
 
         if (error) {
             alert(error.message);
@@ -787,15 +869,26 @@ function PeppPageContent() {
         }
 
         setShowOnLeaderboard(nextValue);
+
+        setFriendLeaderboardRows((current) =>
+            current.map((row) =>
+                row.user_id === userId
+                    ? { ...row, show_on_leaderboard: nextValue }
+                    : row
+            )
+        );
+
+        await loadFriendLeaderboard(userId);
+        await loadMyWeeklyMinutes(userId);
+        await loadMyFriendRank(userId);
     }
 
     async function toggleGlobalLeaderboardVisibility() {
         const nextValue = !showOnGlobalLeaderboard;
 
-        const { error } = await supabase
-            .from("profiles")
-            .update({ show_on_global_leaderboard: nextValue })
-            .eq("id", userId);
+        const { error } = await supabase.rpc("set_my_global_leaderboard_visibility", {
+            show_value: nextValue,
+        });
 
         if (error) {
             alert(error.message);
@@ -803,6 +896,18 @@ function PeppPageContent() {
         }
 
         setShowOnGlobalLeaderboard(nextValue);
+
+        setGlobalLeaderboardRows((current) =>
+            current.map((row) =>
+                row.user_id === userId
+                    ? { ...row, show_on_global_leaderboard: nextValue }
+                    : row
+            )
+        );
+
+        await loadGlobalLeaderboard();
+        await loadMyWeeklyMinutes(userId);
+        await loadMyGlobalRank(userId);
     }
 
     async function toggleHideGlobalLeaderboard() {
@@ -932,55 +1037,31 @@ function PeppPageContent() {
         return post.date >= weekStart;
     });
 
-    const friendLeaderboardMap: Record<string, number> = {};
-
-    weeklySessions.forEach((session) => {
-        friendLeaderboardMap[session.user_id] =
-            (friendLeaderboardMap[session.user_id] || 0) + session.duration;
-    });
-
-    const fullFriendLeaderboard = Object.entries(friendLeaderboardMap).sort(
-        (a, b) => b[1] - a[1]
-    );
-
-    const friendLeaderboard = fullFriendLeaderboard
-        .filter(([id]) => {
-            if (id === userId) return showOnLeaderboard;
-
-            const profile = profiles.find((profile) => profile.id === id);
-            return profile?.show_on_leaderboard ?? false;
-        })
+    const friendLeaderboard = friendLeaderboardRows
+        .filter((row) => row.show_on_leaderboard !== false)
         .slice(0, 3);
 
-    const globalLeaderboardMap: Record<string, number> = {};
-
-    globalWeeklySessions.forEach((session) => {
-        globalLeaderboardMap[session.user_id] =
-            (globalLeaderboardMap[session.user_id] || 0) + session.duration;
-    });
-
-    const fullGlobalLeaderboard = Object.entries(globalLeaderboardMap).sort(
-        (a, b) => b[1] - a[1]
-    );
-
-    const globalLeaderboard = fullGlobalLeaderboard
-        .filter(([id]) => {
-            if (id === userId) return showOnGlobalLeaderboard;
-
-            const profile = globalProfiles.find((profile) => profile.id === id);
-            return profile?.show_on_global_leaderboard ?? true;
-        })
+    const globalLeaderboard = globalLeaderboardRows
+        .filter((row) => row.show_on_global_leaderboard !== false)
         .slice(0, 5);
 
-    const myFriendLeaderboardIndex = fullFriendLeaderboard.findIndex(([id]) => id === userId);
+    const myFriendLeaderboardIndex = friendLeaderboardRows.findIndex(
+        (row) => row.user_id === userId
+    );
 
     const myFriendLeaderboardMinutes =
-        myFriendLeaderboardIndex === -1 ? 0 : fullFriendLeaderboard[myFriendLeaderboardIndex][1];
+        myFriendLeaderboardIndex === -1
+            ? 0
+            : friendLeaderboardRows[myFriendLeaderboardIndex].total_minutes;
 
-    const myGlobalLeaderboardIndex = fullGlobalLeaderboard.findIndex(([id]) => id === userId);
+    const myGlobalLeaderboardIndex = globalLeaderboardRows.findIndex(
+        (row) => row.user_id === userId
+    );
 
     const myGlobalLeaderboardMinutes =
-        myGlobalLeaderboardIndex === -1 ? 0 : fullGlobalLeaderboard[myGlobalLeaderboardIndex][1];
+        myGlobalLeaderboardIndex === -1
+            ? 0
+            : globalLeaderboardRows[myGlobalLeaderboardIndex].total_minutes;
 
     const myWeekMinutes = weeklySessions
         .filter((session) => session.user_id === userId)
@@ -1555,17 +1636,17 @@ function PeppPageContent() {
                                 {friendLeaderboard.length === 0 ? (
                                     <p style={{ color: "#94a3b8" }}>Ingen har registrerat tid denna vecka.</p>
                                 ) : (
-                                    friendLeaderboard.map(([id, minutes], index) => (
-                                        <div key={id} style={leaderboardRowStyle}>
+                                    friendLeaderboard.map((row, index) => (
+                                        <div key={row.user_id} style={leaderboardRowStyle}>
                                             <strong>
-                                                {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"} {getUsername(id)}
+                                                {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"} {row.username}
                                             </strong>
-                                            <span>{formatHours(minutes)}</span>
+                                            <span>{formatHours(row.total_minutes)}</span>
                                         </div>
                                     ))
 
                                 )}
-                                {myFriendLeaderboardIndex !== -1 && (
+                                {userId && (
                                     <div
                                         style={{
                                             marginTop: "12px",
@@ -1575,10 +1656,14 @@ function PeppPageContent() {
                                             border: "1px solid rgba(96, 165, 250, 0.35)",
                                         }}
                                     >
-                                        <strong>Din placering: #{myFriendLeaderboardIndex + 1}</strong>
+                                        <strong>
+                                            {myFriendRank === null
+                                                ? "Ingen placering ännu"
+                                                : `Din placering: #${myFriendRank}`}
+                                        </strong>
 
                                         <div style={{ color: "#94a3b8", marginTop: "4px" }}>
-                                            {formatHours(myFriendLeaderboardMinutes)}
+                                            {formatHours(myWeeklyMinutes)}
                                         </div>
 
                                         <label
@@ -1658,8 +1743,8 @@ function PeppPageContent() {
                                         Ingen har registrerat tid denna vecka.
                                     </p>
                                 ) : (
-                                    globalLeaderboard.map(([id, minutes], index) => (
-                                        <div key={id} style={leaderboardRowStyle}>
+                                    globalLeaderboard.map((row, index) => (
+                                        <div key={row.user_id} style={leaderboardRowStyle}>
                                             <strong>
                                                 {index === 0
                                                     ? "🥇"
@@ -1670,16 +1755,15 @@ function PeppPageContent() {
                                                             : index === 3
                                                                 ? "🏅"
                                                                 : "🎖️"}
-                                                {globalProfiles.find((profile) => profile.id === id)?.username ||
-                                                    getUsername(id)}
+                                                {" "}{row.username}
                                             </strong>
 
-                                            <span>{formatHours(minutes)}</span>
+                                            <span>{formatHours(row.total_minutes)}</span>
                                         </div>
                                     ))
                                 )}
 
-                                {myGlobalLeaderboardIndex !== -1 && (
+                                {userId && (
                                     <div
                                         style={{
                                             marginTop: "12px",
@@ -1689,10 +1773,14 @@ function PeppPageContent() {
                                             border: "1px solid rgba(96, 165, 250, 0.35)",
                                         }}
                                     >
-                                        <strong>Din globala placering: #{myGlobalLeaderboardIndex + 1}</strong>
+                                        <strong>
+                                            {myGlobalRank === null
+                                                ? "Ingen global placering ännu"
+                                                : `Din globala placering: #${myGlobalRank}`}
+                                        </strong>
 
                                         <div style={{ color: "#94a3b8", marginTop: "4px" }}>
-                                            {formatHours(myGlobalLeaderboardMinutes)}
+                                            {formatHours(myWeeklyMinutes)}
                                         </div>
 
                                         <label
