@@ -134,6 +134,7 @@ export default function ElevoversiktPage() {
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [sessions, setSessions] = useState<StudySession[]>([]);
     const [posts, setPosts] = useState<StudyPost[]>([]);
+    const [leaderboardSessions, setLeaderboardSessions] = useState<StudySession[]>([]);
 
     const [, setClockTick] = useState(0);
 
@@ -243,6 +244,7 @@ export default function ElevoversiktPage() {
                 setProfiles([]);
                 setSessions([]);
                 setPosts([]);
+                setLeaderboardSessions([]);
                 setLoading(false);
                 return;
             }
@@ -264,6 +266,7 @@ export default function ElevoversiktPage() {
             setProfiles(profileData || []);
             setSessions([]);
             setPosts([]);
+            setLeaderboardSessions([]);
             setLoading(false);
             return;
         }
@@ -291,6 +294,18 @@ export default function ElevoversiktPage() {
             .gte("date", weekStart)
             .order("created_at", { ascending: false });
 
+        const { data: leaderboardSessionData, error: leaderboardSessionError } = await supabase
+            .from("study_sessions")
+            .select("id, user_id, subject, duration, date, start_time, status, remaining_seconds, started_at")
+            .in("user_id", visibleStudentIds)
+            .gte("date", weekStart)
+            .eq("status", "done")
+            .gt("duration", 0);
+
+        if (leaderboardSessionError) {
+            alert(leaderboardSessionError.message);
+        }
+
         if (postError) {
             alert(postError.message);
         }
@@ -298,6 +313,7 @@ export default function ElevoversiktPage() {
         setProfiles(profileData || []);
         setSessions(sessionData || []);
         setPosts(postData || []);
+        setLeaderboardSessions(leaderboardSessionData || []);
         setLoading(false);
     }
 
@@ -324,8 +340,9 @@ export default function ElevoversiktPage() {
 
     const leaderboardMap: Record<string, number> = {};
 
-    posts.forEach((post) => {
-        leaderboardMap[post.user_id] = (leaderboardMap[post.user_id] || 0) + post.duration;
+    leaderboardSessions.forEach((session) => {
+        leaderboardMap[session.user_id] =
+            (leaderboardMap[session.user_id] || 0) + session.duration;
     });
 
     const leaderboard = Object.entries(leaderboardMap)

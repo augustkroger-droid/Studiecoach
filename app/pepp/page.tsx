@@ -11,6 +11,7 @@ type Profile = {
     id: string;
     username: string;
     show_on_leaderboard?: boolean;
+    show_on_global_leaderboard?: boolean;
     hide_leaderboard?: boolean;
     hide_global_leaderboard?: boolean;
     is_admin?: boolean;
@@ -37,6 +38,7 @@ type StudySession = {
     subject: string;
     duration: number;
     date: string;
+    status?: "planned" | "active" | "paused" | "done" | "missed";
 };
 
 type StudyPost = {
@@ -137,6 +139,7 @@ function PeppPageContent() {
     const [userId, setUserId] = useState("");
     const [myProfile, setMyProfile] = useState<Profile | null>(null);
     const [showOnLeaderboard, setShowOnLeaderboard] = useState(true);
+    const [showOnGlobalLeaderboard, setShowOnGlobalLeaderboard] = useState(true);
     const [hideLeaderboard, setHideLeaderboard] = useState(false);
     const [hideGlobalLeaderboard, setHideGlobalLeaderboard] = useState(false);
 
@@ -206,12 +209,13 @@ function PeppPageContent() {
 
         const { data: profileData } = await supabase
             .from("profiles")
-            .select("id, username, show_on_leaderboard, hide_leaderboard, hide_global_leaderboard, is_admin, role")
+            .select("id, username, show_on_leaderboard, show_on_global_leaderboard, hide_leaderboard, hide_global_leaderboard, is_admin, role")
             .eq("id", user.id)
             .single();
 
         setMyProfile(profileData);
         setShowOnLeaderboard(profileData?.show_on_leaderboard ?? false);
+        setShowOnGlobalLeaderboard(profileData?.show_on_global_leaderboard ?? true);
         setHideLeaderboard(profileData?.hide_leaderboard ?? false);
         setHideGlobalLeaderboard(profileData?.hide_global_leaderboard ?? false);
 
@@ -365,9 +369,11 @@ function PeppPageContent() {
 
         let query = supabase
             .from("study_sessions")
-            .select("id, user_id, subject, duration, date")
+            .select("id, user_id, subject, duration, date, status")
             .gte("date", weekStart)
-            .lt("date", weekEnd);
+            .lt("date", weekEnd)
+            .eq("status", "done")
+            .gt("duration", 0);
 
         if (allowedUserIds) {
             query = query.in("user_id", allowedUserIds);
@@ -390,9 +396,11 @@ function PeppPageContent() {
 
         const { data, error } = await supabase
             .from("study_sessions")
-            .select("id, user_id, subject, duration, date")
+            .select("id, user_id, subject, duration, date, status")
             .gte("date", weekStart)
-            .lt("date", weekEnd);
+            .lt("date", weekEnd)
+            .eq("status", "done")
+            .gt("duration", 0);
 
         if (error) {
             alert(error.message);
@@ -535,7 +543,7 @@ function PeppPageContent() {
 
         const { data, error } = await supabase
             .from("profiles")
-            .select("id, username, show_on_leaderboard")
+            .select("id, username, show_on_leaderboard, show_on_global_leaderboard")
             .ilike("username", `%${searchUsername}%`)
             .neq("id", userId)
             .limit(10);
@@ -781,6 +789,22 @@ function PeppPageContent() {
         setShowOnLeaderboard(nextValue);
     }
 
+    async function toggleGlobalLeaderboardVisibility() {
+        const nextValue = !showOnGlobalLeaderboard;
+
+        const { error } = await supabase
+            .from("profiles")
+            .update({ show_on_global_leaderboard: nextValue })
+            .eq("id", userId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setShowOnGlobalLeaderboard(nextValue);
+    }
+
     async function toggleHideGlobalLeaderboard() {
         const nextValue = !hideGlobalLeaderboard;
 
@@ -941,17 +965,22 @@ function PeppPageContent() {
 
     const globalLeaderboard = fullGlobalLeaderboard
         .filter(([id]) => {
-            if (id === userId) return showOnLeaderboard;
+            if (id === userId) return showOnGlobalLeaderboard;
 
             const profile = globalProfiles.find((profile) => profile.id === id);
-            return profile?.show_on_leaderboard ?? false;
+            return profile?.show_on_global_leaderboard ?? true;
         })
         .slice(0, 5);
 
-    const myLeaderboardIndex = fullGlobalLeaderboard.findIndex(([id]) => id === userId);
+    const myFriendLeaderboardIndex = fullFriendLeaderboard.findIndex(([id]) => id === userId);
 
-    const myLeaderboardMinutes =
-        myLeaderboardIndex === -1 ? 0 : fullGlobalLeaderboard[myLeaderboardIndex][1];
+    const myFriendLeaderboardMinutes =
+        myFriendLeaderboardIndex === -1 ? 0 : fullFriendLeaderboard[myFriendLeaderboardIndex][1];
+
+    const myGlobalLeaderboardIndex = fullGlobalLeaderboard.findIndex(([id]) => id === userId);
+
+    const myGlobalLeaderboardMinutes =
+        myGlobalLeaderboardIndex === -1 ? 0 : fullGlobalLeaderboard[myGlobalLeaderboardIndex][1];
 
     const myWeekMinutes = weeklySessions
         .filter((session) => session.user_id === userId)
@@ -1509,7 +1538,7 @@ function PeppPageContent() {
 
 
                                 {friendLeaderboard.length === 0 ? (
-                                    <p style={{ color: "#94a3b8" }}>Ingen har postat pass denna vecka.</p>
+                                    <p style={{ color: "#94a3b8" }}>Ingen har registrerat tid denna vecka.</p>
                                 ) : (
                                     friendLeaderboard.map(([id, minutes], index) => (
                                         <div key={id} style={leaderboardRowStyle}>
@@ -1521,7 +1550,7 @@ function PeppPageContent() {
                                     ))
 
                                 )}
-                                {myLeaderboardIndex !== -1 && (
+                                {myFriendLeaderboardIndex !== -1 && (
                                     <div
                                         style={{
                                             marginTop: "12px",
@@ -1531,10 +1560,10 @@ function PeppPageContent() {
                                             border: "1px solid rgba(96, 165, 250, 0.35)",
                                         }}
                                     >
-                                        <strong>Din placering: #{myLeaderboardIndex + 1}</strong>
+                                        <strong>Din placering: #{myFriendLeaderboardIndex + 1}</strong>
 
                                         <div style={{ color: "#94a3b8", marginTop: "4px" }}>
-                                            {formatHours(myLeaderboardMinutes)}
+                                            {formatHours(myFriendLeaderboardMinutes)}
                                         </div>
 
                                         <label
@@ -1611,7 +1640,7 @@ function PeppPageContent() {
                             <>
                                 {globalLeaderboard.length === 0 ? (
                                     <p style={{ color: "#94a3b8" }}>
-                                        Ingen har postat pass denna vecka.
+                                        Ingen har registrerat tid denna vecka.
                                     </p>
                                 ) : (
                                     globalLeaderboard.map(([id, minutes], index) => (
@@ -1633,6 +1662,50 @@ function PeppPageContent() {
                                             <span>{formatHours(minutes)}</span>
                                         </div>
                                     ))
+                                )}
+
+                                {myGlobalLeaderboardIndex !== -1 && (
+                                    <div
+                                        style={{
+                                            marginTop: "12px",
+                                            padding: "12px",
+                                            borderRadius: "12px",
+                                            background: "rgba(37, 99, 235, 0.14)",
+                                            border: "1px solid rgba(96, 165, 250, 0.35)",
+                                        }}
+                                    >
+                                        <strong>Din globala placering: #{myGlobalLeaderboardIndex + 1}</strong>
+
+                                        <div style={{ color: "#94a3b8", marginTop: "4px" }}>
+                                            {formatHours(myGlobalLeaderboardMinutes)}
+                                        </div>
+
+                                        <label
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "10px",
+                                                marginTop: "14px",
+                                                color: "#cbd5e1",
+                                                fontWeight: "bold",
+                                                cursor: "pointer",
+                                                fontSize: "14px",
+                                            }}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={showOnGlobalLeaderboard}
+                                                onChange={toggleGlobalLeaderboardVisibility}
+                                                style={{
+                                                    width: "16px",
+                                                    height: "16px",
+                                                    cursor: "pointer",
+                                                }}
+                                            />
+
+                                            Delta i globala topplistan
+                                        </label>
+                                    </div>
                                 )}
                             </>
                         )}

@@ -13,6 +13,7 @@ type Profile = {
 
 type StudySession = {
   id: string;
+  user_id: string;
   subject: string;
   duration: number;
   date: string;
@@ -112,6 +113,7 @@ export default function Home() {
   const [nextSession, setNextSession] = useState<StudySession | null>(null);
   const [nextExam, setNextExam] = useState<Exam | null>(null);
   const [posts, setPosts] = useState<StudyPost[]>([]);
+  const [leaderboardSessions, setLeaderboardSessions] = useState<StudySession[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
@@ -152,7 +154,7 @@ export default function Home() {
 
     const { data: sessionData } = await supabase
       .from("study_sessions")
-      .select("id, subject, duration, date, start_time, status")
+      .select("id, user_id, subject, duration, date, start_time, status")
       .eq("user_id", user.id)
       .gte("date", today)
       .neq("status", "done")
@@ -209,14 +211,20 @@ export default function Home() {
       new Set([user.id, ...acceptedFriendIds, ...teacherStudentIds])
     );
 
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    const oneWeekAgoString = formatDate(oneWeekAgo);
+    const todayForWeek = new Date();
+    const dayForWeek = todayForWeek.getDay();
+    const diffForWeek = (dayForWeek === 0 ? -6 : 1) - dayForWeek;
+
+    const mondayForWeek = new Date(todayForWeek);
+    mondayForWeek.setDate(todayForWeek.getDate() + diffForWeek);
+    mondayForWeek.setHours(0, 0, 0, 0);
+
+    const weekStartString = formatDate(mondayForWeek);
 
     let postQuery = supabase
       .from("study_posts")
       .select("*")
-      .gte("date", oneWeekAgoString)
+      .gte("date", weekStartString)
       .order("created_at", { ascending: false });
 
     if (!isAdmin) {
@@ -226,6 +234,21 @@ export default function Home() {
     const { data: postData } = await postQuery;
 
     setPosts(postData || []);
+
+    let leaderboardSessionQuery = supabase
+      .from("study_sessions")
+      .select("id, user_id, subject, duration, date, start_time, status")
+      .gte("date", weekStartString)
+      .eq("status", "done")
+      .gt("duration", 0);
+
+    if (!isAdmin) {
+      leaderboardSessionQuery = leaderboardSessionQuery.in("user_id", visibleUserIds);
+    }
+
+    const { data: leaderboardSessionData } = await leaderboardSessionQuery;
+
+    setLeaderboardSessions(leaderboardSessionData || []);
 
     let profileQuery = supabase
       .from("profiles")
@@ -311,26 +334,11 @@ export default function Home() {
     return dateString === formatDate(new Date());
   }
 
-  const today = new Date();
-  const day = today.getDay();
-
-  const diff = (day === 0 ? -6 : 1) - day;
-
-  const monday = new Date(today);
-  monday.setDate(today.getDate() + diff);
-  monday.setHours(0, 0, 0, 0);
-
-  const weekStart = formatDate(monday);
-
-  const postsLastWeek = posts.filter((post) => {
-    return post.date >= weekStart;
-  });
-
   const leaderboardMap: Record<string, number> = {};
 
-  postsLastWeek.forEach((post) => {
-    leaderboardMap[post.user_id] =
-      (leaderboardMap[post.user_id] || 0) + post.duration;
+  leaderboardSessions.forEach((session) => {
+    leaderboardMap[session.user_id] =
+      (leaderboardMap[session.user_id] || 0) + session.duration;
   });
 
   const leaderboard = Object.entries(leaderboardMap)
