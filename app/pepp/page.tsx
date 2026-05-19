@@ -58,7 +58,7 @@ type StudyPost = {
     title?: string | null;
 };
 
-type Reaction = "❤️" | "🔥" | "👏" | "💪" | "🎉" | "🤯";
+type Reaction = "❤️" | "🔥" | "👏" | "💪" | "🎉" | "🤯" | "😢";
 
 type Like = {
     id: string;
@@ -67,7 +67,7 @@ type Like = {
     reaction: Reaction;
 };
 
-const REACTIONS: Reaction[] = ["❤️", "🔥", "👏", "💪", "🎉", "🤯"];
+const REACTIONS: Reaction[] = ["❤️", "🔥", "👏", "💪", "🎉", "🤯", "😢"];
 
 type PostComment = {
     id: string;
@@ -1170,105 +1170,120 @@ function PeppPageContent() {
                                                 }}
                                                 onMouseLeave={() => setHoveredLikesPostId(null)}
                                             >
-                                                {hoveredLikesPostId === post.id && !hoveredReactionKey && (
-                                                    <div
-                                                        style={{
-                                                            position: "absolute",
-                                                            right: 0,
-                                                            bottom: "54px",
-                                                            display: "flex",
-                                                            gap: "8px",
-                                                            padding: "9px 11px",
-                                                            borderRadius: "999px",
-                                                            background: "rgba(15, 23, 42, 0.92)",
-                                                            border: "1px solid rgba(148, 163, 184, 0.22)",
-                                                            boxShadow: "0 18px 45px rgba(0,0,0,0.45)",
-                                                            backdropFilter: "blur(14px)",
-                                                            zIndex: 40,
-                                                        }}
-                                                    >
-                                                        {REACTIONS.map((reaction) => (
-                                                            <button
-                                                                key={reaction}
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    toggleReaction(post.id, reaction);
-                                                                }}
+                                                <div style={{ position: "relative" }}>
+                                                    {hoveredLikesPostId === post.id && !hoveredReactionKey && (
+                                                        <>
+                                                            <div
                                                                 style={{
-                                                                    width: "44px",
-                                                                    height: "44px",
+                                                                    position: "absolute",
+                                                                    right: 0,
+                                                                    bottom: "46px",
+                                                                    width: "230px",
+                                                                    height: "14px",
+                                                                    zIndex: 39,
+                                                                }}
+                                                            />
+
+                                                            <div
+                                                                style={{
+                                                                    position: "absolute",
+                                                                    right: 0,
+                                                                    bottom: "54px",
+                                                                    display: "flex",
+                                                                    gap: "8px",
+                                                                    padding: "9px 11px",
                                                                     borderRadius: "999px",
-                                                                    border:
-                                                                        myReaction?.reaction === reaction
-                                                                            ? "1px solid rgba(251, 191, 36, 0.65)"
-                                                                            : "1px solid rgba(255,255,255,0.06)",
-                                                                    background:
-                                                                        myReaction?.reaction === reaction
-                                                                            ? "rgba(251, 191, 36, 0.16)"
-                                                                            : "rgba(255,255,255,0.07)",
-                                                                    cursor: "pointer",
-                                                                    fontSize: "24px",
-                                                                    lineHeight: 1,
-                                                                    display: "grid",
-                                                                    placeItems: "center",
-                                                                    transition: "transform 0.16s ease, background 0.16s ease",
-                                                                }}
-                                                                onMouseEnter={(e) => {
-                                                                    e.currentTarget.style.transform = "translateY(-6px) scale(1.22)";
-                                                                }}
-                                                                onMouseLeave={(e) => {
-                                                                    e.currentTarget.style.transform =
-                                                                        myReaction?.reaction === reaction
-                                                                            ? "translateY(-3px) scale(1.1)"
-                                                                            : "translateY(0) scale(1)";
+                                                                    background: "rgba(15, 23, 42, 0.92)",
+                                                                    border: "1px solid rgba(148, 163, 184, 0.22)",
+                                                                    boxShadow: "0 18px 45px rgba(0,0,0,0.45)",
+                                                                    backdropFilter: "blur(14px)",
+                                                                    zIndex: 40,
                                                                 }}
                                                             >
-                                                                {reaction}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
+                                                                {REACTIONS.map((reaction) => (
+                                                                    <button
+                                                                        key={reaction}
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            toggleReaction(post.id, reaction);
+                                                                        }}
+                                                                        style={{
+                                                                            width: "44px",
+                                                                            height: "44px",
+                                                                            borderRadius: "999px",
+                                                                            border:
+                                                                                myReaction?.reaction === reaction
+                                                                                    ? "1px solid rgba(251, 191, 36, 0.65)"
+                                                                                    : "1px solid rgba(255,255,255,0.06)",
+                                                                            background:
+                                                                                myReaction?.reaction === reaction
+                                                                                    ? "rgba(251, 191, 36, 0.16)"
+                                                                                    : "rgba(255,255,255,0.07)",
+                                                                            cursor: "pointer",
+                                                                            fontSize: "24px",
+                                                                            lineHeight: 1,
+                                                                            display: "grid",
+                                                                            placeItems: "center",
+                                                                            transition: "transform 0.16s ease, background 0.16s ease",
+                                                                        }}
+                                                                        onMouseEnter={(e) => {
+                                                                            e.currentTarget.style.transform = "translateY(-6px) scale(1.22)";
+                                                                        }}
+                                                                        onMouseLeave={(e) => {
+                                                                            e.currentTarget.style.transform =
+                                                                                myReaction?.reaction === reaction
+                                                                                    ? "translateY(-3px) scale(1.1)"
+                                                                                    : "translateY(0) scale(1)";
+                                                                        }}
+                                                                    >
+                                                                        {reaction}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </>
+                                                    )}
 
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (myReaction) {
-                                                            toggleReaction(post.id, myReaction.reaction);
-                                                        } else {
-                                                            toggleReaction(post.id, "❤️");
-                                                        }
-                                                    }}
-                                                    style={{
-                                                        height: "46px",
-                                                        minWidth: "96px",
-                                                        padding: "0 18px",
-                                                        borderRadius: "999px",
-                                                        background: myReaction
-                                                            ? "linear-gradient(135deg, rgba(239,68,68,0.24), rgba(251,113,133,0.14))"
-                                                            : "rgba(15, 23, 42, 0.78)",
-                                                        color: myReaction ? "#fecaca" : "#e2e8f0",
-                                                        border: myReaction
-                                                            ? "1px solid rgba(248, 113, 113, 0.42)"
-                                                            : "1px solid rgba(226, 232, 240, 0.32)",
-                                                        cursor: "pointer",
-                                                        fontWeight: "bold",
-                                                        fontSize: "16px",
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        justifyContent: "center",
-                                                        gap: "7px",
-                                                        boxShadow: myReaction
-                                                            ? "0 0 22px rgba(239,68,68,0.16)"
-                                                            : "0 8px 22px rgba(0,0,0,0.18)",
-                                                        transition: "0.18s ease",
-                                                    }}
-                                                >
-                                                    <span style={{ fontSize: myReaction ? "20px" : "18px" }}>
-                                                        {myReaction?.reaction || "🤍"}
-                                                    </span>
-                                                    <span>{postReactions.length}</span>
-                                                </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (myReaction) {
+                                                                toggleReaction(post.id, myReaction.reaction);
+                                                            } else {
+                                                                toggleReaction(post.id, "❤️");
+                                                            }
+                                                        }}
+                                                        style={{
+                                                            height: "46px",
+                                                            minWidth: "96px",
+                                                            padding: "0 18px",
+                                                            borderRadius: "999px",
+                                                            background: myReaction
+                                                                ? "linear-gradient(135deg, rgba(239,68,68,0.24), rgba(251,113,133,0.14))"
+                                                                : "rgba(15, 23, 42, 0.78)",
+                                                            color: myReaction ? "#fecaca" : "#e2e8f0",
+                                                            border: myReaction
+                                                                ? "1px solid rgba(248, 113, 113, 0.42)"
+                                                                : "1px solid rgba(226, 232, 240, 0.32)",
+                                                            cursor: "pointer",
+                                                            fontWeight: "bold",
+                                                            fontSize: "16px",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                            gap: "7px",
+                                                            boxShadow: myReaction
+                                                                ? "0 0 22px rgba(239,68,68,0.16)"
+                                                                : "0 8px 22px rgba(0,0,0,0.18)",
+                                                            transition: "0.18s ease",
+                                                        }}
+                                                    >
+                                                        <span style={{ fontSize: myReaction ? "20px" : "18px" }}>
+                                                            {myReaction?.reaction || "🤍"}
+                                                        </span>
+                                                        <span>{postReactions.length}</span>
+                                                    </button>
+                                                </div>
 
                                                 {reactionCounts.length > 0 && (
                                                     <div
