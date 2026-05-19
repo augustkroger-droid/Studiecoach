@@ -23,6 +23,8 @@ type StudySession = {
     date: string;
     start_time?: string | null;
     status: "planned" | "active" | "paused" | "done" | "missed";
+    remaining_seconds?: number | null;
+    started_at?: string | null;
 };
 
 type StudyPost = {
@@ -91,6 +93,32 @@ function formatDate(dateString: string) {
     return `${day}/${month}/${year}`;
 }
 
+function formatRemainingTime(session: StudySession) {
+    return formatClock(getRemainingSeconds(session));
+}
+
+function getRemainingSeconds(session: StudySession) {
+    const baseSeconds = session.remaining_seconds ?? session.duration * 60;
+
+    if (session.status !== "active" || !session.started_at) {
+        return baseSeconds;
+    }
+
+    const elapsedSeconds = Math.floor(
+        (Date.now() - new Date(session.started_at).getTime()) / 1000
+    );
+
+    return Math.max(baseSeconds - elapsedSeconds, 0);
+}
+
+function formatClock(seconds: number) {
+    const safeSeconds = Math.max(0, seconds);
+    const minutes = Math.floor(safeSeconds / 60);
+    const secs = safeSeconds % 60;
+
+    return `${minutes}:${String(secs).padStart(2, "0")}`;
+}
+
 export default function ElevoversiktPage() {
     const [themeKey, setThemeKey] = useState<ThemeKey>("ocean");
 
@@ -107,9 +135,60 @@ export default function ElevoversiktPage() {
     const [sessions, setSessions] = useState<StudySession[]>([]);
     const [posts, setPosts] = useState<StudyPost[]>([]);
 
+    const [, setClockTick] = useState(0);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setClockTick((tick) => tick + 1);
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, []);
+
     useEffect(() => {
         loadOverview();
     }, []);
+
+    useEffect(() => {
+        const expiredActiveSessions = sessions.filter(
+            (session) => session.status === "active" && getRemainingSeconds(session) <= 0
+        );
+
+        if (expiredActiveSessions.length === 0) return;
+
+        async function pauseExpiredSessions() {
+            const ids = expiredActiveSessions.map((session) => session.id);
+
+            const { error } = await supabase
+                .from("study_sessions")
+                .update({
+                    status: "paused",
+                    remaining_seconds: 0,
+                    started_at: null,
+                })
+                .in("id", ids);
+
+            if (error) {
+                console.error("Kunde inte pausa färdiga aktiva pass:", error.message);
+                return;
+            }
+
+            setSessions((current) =>
+                current.map((session) =>
+                    ids.includes(session.id)
+                        ? {
+                            ...session,
+                            status: "paused",
+                            remaining_seconds: 0,
+                            started_at: null,
+                        }
+                        : session
+                )
+            );
+        }
+
+        pauseExpiredSessions();
+    }, [sessions]);
 
     async function loadOverview() {
         const { data: userData } = await supabase.auth.getUser();
@@ -454,6 +533,10 @@ function SessionSection({
                                 <p style={{ margin: "4px 0 0", color: "#94a3b8" }}>
                                     {session.subject} · {formatHours(session.duration)}
                                     {session.start_time ? ` · ${session.start_time}` : ""}
+                                </p>
+
+                                <p style={{ margin: "5px 0 0", color: "#cbd5e1", fontSize: "13px" }}>
+                                    ⏱ {formatRemainingTime(session)}
                                 </p>
                             </div>
                         </div>

@@ -60,6 +60,8 @@ export default function NavBar() {
       return;
     }
 
+    registerPushForUser(user.id);
+
     const { data } = await supabase
       .from("profiles")
       .select("is_admin, role")
@@ -78,8 +80,18 @@ export default function NavBar() {
     localStorage.setItem("navbarRoleLoaded", "true");
   }
 
+  async function registerPushForUser(userId: string) {
+    try {
+      const { registerPushNotifications } = await import("@/lib/pushNotifications");
+      await registerPushNotifications(userId);
+    } catch (error) {
+      console.error("Kunde inte registrera pushnotiser:", error);
+    }
+  }
+
+
   if (!roleLoaded) {
-    
+
     return (
       <nav
         className="main-navbar"

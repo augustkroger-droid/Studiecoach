@@ -12,6 +12,7 @@ type Profile = {
     username: string;
     show_on_leaderboard?: boolean;
     hide_leaderboard?: boolean;
+    hide_global_leaderboard?: boolean;
     is_admin?: boolean;
     role?: "student" | "teacher" | "admin" | null;
 };
@@ -28,6 +29,14 @@ type FriendRequest = {
     from_user_id: string;
     to_user_id: string;
     status: "pending" | "accepted";
+};
+
+type StudySession = {
+    id: string;
+    user_id: string;
+    subject: string;
+    duration: number;
+    date: string;
 };
 
 type StudyPost = {
@@ -92,6 +101,14 @@ function getStartOfWeek() {
     return monday;
 }
 
+function getEndOfWeek() {
+    const monday = getStartOfWeek();
+    const nextMonday = new Date(monday);
+    nextMonday.setDate(monday.getDate() + 7);
+
+    return nextMonday;
+}
+
 function toDateString(date: Date) {
     return [
         date.getFullYear(),
@@ -121,6 +138,7 @@ function PeppPageContent() {
     const [myProfile, setMyProfile] = useState<Profile | null>(null);
     const [showOnLeaderboard, setShowOnLeaderboard] = useState(true);
     const [hideLeaderboard, setHideLeaderboard] = useState(false);
+    const [hideGlobalLeaderboard, setHideGlobalLeaderboard] = useState(false);
 
     const [posts, setPosts] = useState<StudyPost[]>([]);
     const [likes, setLikes] = useState<Like[]>([]);
@@ -132,6 +150,9 @@ function PeppPageContent() {
     const [highlightedPostId, setHighlightedPostId] = useState<string | null>(null);
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+    const [weeklySessions, setWeeklySessions] = useState<StudySession[]>([]);
+    const [globalWeeklySessions, setGlobalWeeklySessions] = useState<StudySession[]>([]);
+    const [globalProfiles, setGlobalProfiles] = useState<Profile[]>([]);
 
     const [searchUsername, setSearchUsername] = useState("");
     const [searchResults, setSearchResults] = useState<Profile[]>([]);
@@ -185,13 +206,14 @@ function PeppPageContent() {
 
         const { data: profileData } = await supabase
             .from("profiles")
-            .select("id, username, show_on_leaderboard, hide_leaderboard, is_admin, role")
+            .select("id, username, show_on_leaderboard, hide_leaderboard, hide_global_leaderboard, is_admin, role")
             .eq("id", user.id)
             .single();
 
         setMyProfile(profileData);
         setShowOnLeaderboard(profileData?.show_on_leaderboard ?? false);
         setHideLeaderboard(profileData?.hide_leaderboard ?? false);
+        setHideGlobalLeaderboard(profileData?.hide_global_leaderboard ?? false);
 
         const isAdmin = profileData?.is_admin === true || profileData?.role === "admin";
         const isTeacher = profileData?.role === "teacher" || isAdmin;
@@ -228,6 +250,19 @@ function PeppPageContent() {
             : Array.from(new Set([user.id, ...acceptedIds, ...loadedTeacherStudentIds]));
 
         const loadedPosts = await loadPosts(allowedUserIds);
+        const loadedWeeklySessions = await loadWeeklySessions(allowedUserIds);
+        const loadedGlobalWeeklySessions = await loadGlobalWeeklySessions();
+
+        const loadedGlobalPosts = await loadGlobalWeeklyPosts();
+
+        const globalProfileIds = Array.from(
+            new Set([
+                ...loadedGlobalPosts.map((post) => post.user_id),
+                ...loadedGlobalWeeklySessions.map((session) => session.user_id),
+            ])
+        );
+
+        await loadGlobalProfiles(globalProfileIds);
 
         const profileIds = new Set<string>();
 
@@ -240,6 +275,10 @@ function PeppPageContent() {
 
         loadedPosts.forEach((post) => {
             profileIds.add(post.user_id);
+        });
+
+        loadedWeeklySessions.forEach((session) => {
+            profileIds.add(session.user_id);
         });
 
         const visiblePostIds = loadedPosts.map((post) => post.id);
@@ -295,13 +334,14 @@ function PeppPageContent() {
     }
 
     async function loadPosts(allowedUserIds: string[] | null) {
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        const weekStart = toDateString(getStartOfWeek());
+        const weekEnd = toDateString(getEndOfWeek());
 
         let query = supabase
             .from("study_posts")
             .select("*")
-            .gte("date", oneWeekAgo.toISOString().split("T")[0])
+            .gte("date", weekStart)
+            .lt("date", weekEnd)
             .order("created_at", { ascending: false });
 
         if (allowedUserIds) {
@@ -317,6 +357,87 @@ function PeppPageContent() {
 
         setPosts(data || []);
         return data || [];
+    }
+
+    async function loadWeeklySessions(allowedUserIds: string[] | null) {
+        const weekStart = toDateString(getStartOfWeek());
+        const weekEnd = toDateString(getEndOfWeek());
+
+        let query = supabase
+            .from("study_sessions")
+            .select("id, user_id, subject, duration, date")
+            .gte("date", weekStart)
+            .lt("date", weekEnd);
+
+        if (allowedUserIds) {
+            query = query.in("user_id", allowedUserIds);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            alert(error.message);
+            return [];
+        }
+
+        setWeeklySessions(data || []);
+        return data || [];
+    }
+
+    async function loadGlobalWeeklySessions() {
+        const weekStart = toDateString(getStartOfWeek());
+        const weekEnd = toDateString(getEndOfWeek());
+
+        const { data, error } = await supabase
+            .from("study_sessions")
+            .select("id, user_id, subject, duration, date")
+            .gte("date", weekStart)
+            .lt("date", weekEnd);
+
+        if (error) {
+            alert(error.message);
+            return [];
+        }
+
+        setGlobalWeeklySessions(data || []);
+        return data || [];
+    }
+
+    async function loadGlobalWeeklyPosts() {
+        const weekStart = toDateString(getStartOfWeek());
+        const weekEnd = toDateString(getEndOfWeek());
+
+        const { data, error } = await supabase
+            .from("study_posts")
+            .select("*")
+            .gte("date", weekStart)
+            .lt("date", weekEnd)
+
+        if (error) {
+            alert(error.message);
+            return [];
+        }
+
+        return data || [];
+    }
+
+    async function loadGlobalProfiles(userIds: string[]) {
+        if (userIds.length === 0) {
+            setGlobalProfiles([]);
+            return;
+        }
+
+        const { data, error } = await supabase
+            .from("profiles")
+            .select("id, username, show_on_leaderboard, hide_leaderboard, is_admin, role")
+            .in("id", userIds);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setGlobalProfiles(data || []);
     }
 
     async function loadProfiles(isAdmin: boolean, userIds: string[]) {
@@ -660,6 +781,22 @@ function PeppPageContent() {
         setShowOnLeaderboard(nextValue);
     }
 
+    async function toggleHideGlobalLeaderboard() {
+        const nextValue = !hideGlobalLeaderboard;
+
+        const { error } = await supabase
+            .from("profiles")
+            .update({ hide_global_leaderboard: nextValue })
+            .eq("id", userId);
+
+        if (error) {
+            alert(error.message);
+            return;
+        }
+
+        setHideGlobalLeaderboard(nextValue);
+    }
+
     async function toggleHideLeaderboard() {
         const nextValue = !hideLeaderboard;
 
@@ -771,18 +908,18 @@ function PeppPageContent() {
         return post.date >= weekStart;
     });
 
-    const leaderboardMap: Record<string, number> = {};
+    const friendLeaderboardMap: Record<string, number> = {};
 
-    postsThisWeek.forEach((post) => {
-        leaderboardMap[post.user_id] =
-            (leaderboardMap[post.user_id] || 0) + post.duration;
+    weeklySessions.forEach((session) => {
+        friendLeaderboardMap[session.user_id] =
+            (friendLeaderboardMap[session.user_id] || 0) + session.duration;
     });
 
-    const fullLeaderboard = Object.entries(leaderboardMap).sort(
+    const fullFriendLeaderboard = Object.entries(friendLeaderboardMap).sort(
         (a, b) => b[1] - a[1]
     );
 
-    const leaderboard = fullLeaderboard
+    const friendLeaderboard = fullFriendLeaderboard
         .filter(([id]) => {
             if (id === userId) return showOnLeaderboard;
 
@@ -791,14 +928,34 @@ function PeppPageContent() {
         })
         .slice(0, 3);
 
-    const myLeaderboardIndex = fullLeaderboard.findIndex(([id]) => id === userId);
+    const globalLeaderboardMap: Record<string, number> = {};
+
+    globalWeeklySessions.forEach((session) => {
+        globalLeaderboardMap[session.user_id] =
+            (globalLeaderboardMap[session.user_id] || 0) + session.duration;
+    });
+
+    const fullGlobalLeaderboard = Object.entries(globalLeaderboardMap).sort(
+        (a, b) => b[1] - a[1]
+    );
+
+    const globalLeaderboard = fullGlobalLeaderboard
+        .filter(([id]) => {
+            if (id === userId) return showOnLeaderboard;
+
+            const profile = globalProfiles.find((profile) => profile.id === id);
+            return profile?.show_on_leaderboard ?? false;
+        })
+        .slice(0, 5);
+
+    const myLeaderboardIndex = fullGlobalLeaderboard.findIndex(([id]) => id === userId);
 
     const myLeaderboardMinutes =
-        myLeaderboardIndex === -1 ? 0 : fullLeaderboard[myLeaderboardIndex][1];
+        myLeaderboardIndex === -1 ? 0 : fullGlobalLeaderboard[myLeaderboardIndex][1];
 
-    const myWeekMinutes = postsThisWeek
-        .filter((post) => post.user_id === userId)
-        .reduce((sum, post) => sum + post.duration, 0);
+    const myWeekMinutes = weeklySessions
+        .filter((session) => session.user_id === userId)
+        .reduce((sum, session) => sum + session.duration, 0);
 
     const goalPercent =
         weeklyGoalMinutes === 0
@@ -1324,7 +1481,7 @@ function PeppPageContent() {
                                 marginBottom: hideLeaderboard ? 0 : "14px",
                             }}
                         >
-                            <h2 style={{ margin: 0 }}>🏆 Veckans topp 3</h2>
+                            <h2 style={{ margin: 0 }}>👥 Topp 3 bland vänner</h2>
 
                             <button
                                 onClick={toggleHideLeaderboard}
@@ -1351,10 +1508,10 @@ function PeppPageContent() {
                             <>
 
 
-                                {leaderboard.length === 0 ? (
+                                {friendLeaderboard.length === 0 ? (
                                     <p style={{ color: "#94a3b8" }}>Ingen har postat pass denna vecka.</p>
                                 ) : (
-                                    leaderboard.map(([id, minutes], index) => (
+                                    friendLeaderboard.map(([id, minutes], index) => (
                                         <div key={id} style={leaderboardRowStyle}>
                                             <strong>
                                                 {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"} {getUsername(id)}
@@ -1411,6 +1568,76 @@ function PeppPageContent() {
                         )}
 
                         {hideLeaderboard && (
+                            <p style={{ color: "#94a3b8", margin: "12px 0 0" }}>
+                                Topplistan är dold. Klicka på + för att visa den igen.
+                            </p>
+                        )}
+                    </section>
+
+                    <section style={cardStyle(theme)}>
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                gap: "12px",
+                                marginBottom: hideGlobalLeaderboard ? 0 : "14px",
+                            }}
+                        >
+                            <h2 style={{ margin: 0 }}>🌍 Topp 5 alla användare</h2>
+
+                            <button
+                                onClick={toggleHideGlobalLeaderboard}
+                                type="button"
+                                title={hideGlobalLeaderboard ? "Visa topplistan" : "Dölj topplistan"}
+                                style={{
+                                    width: "36px",
+                                    height: "36px",
+                                    borderRadius: "999px",
+                                    border: `1px solid ${theme.border}`,
+                                    background: "rgba(255,255,255,0.08)",
+                                    color: theme.text,
+                                    cursor: "pointer",
+                                    fontWeight: 900,
+                                    fontSize: "20px",
+                                    lineHeight: 1,
+                                }}
+                            >
+                                {hideGlobalLeaderboard ? "+" : "−"}
+                            </button>
+                        </div>
+
+                        {!hideGlobalLeaderboard && (
+                            <>
+                                {globalLeaderboard.length === 0 ? (
+                                    <p style={{ color: "#94a3b8" }}>
+                                        Ingen har postat pass denna vecka.
+                                    </p>
+                                ) : (
+                                    globalLeaderboard.map(([id, minutes], index) => (
+                                        <div key={id} style={leaderboardRowStyle}>
+                                            <strong>
+                                                {index === 0
+                                                    ? "🥇"
+                                                    : index === 1
+                                                        ? "🥈"
+                                                        : index === 2
+                                                            ? "🥉"
+                                                            : index === 3
+                                                                ? "🏅"
+                                                                : "🎖️"}
+                                                {globalProfiles.find((profile) => profile.id === id)?.username ||
+                                                    getUsername(id)}
+                                            </strong>
+
+                                            <span>{formatHours(minutes)}</span>
+                                        </div>
+                                    ))
+                                )}
+                            </>
+                        )}
+
+                        {hideGlobalLeaderboard && (
                             <p style={{ color: "#94a3b8", margin: "12px 0 0" }}>
                                 Topplistan är dold. Klicka på + för att visa den igen.
                             </p>

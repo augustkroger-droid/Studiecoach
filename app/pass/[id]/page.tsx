@@ -215,6 +215,9 @@ export default function PassPage() {
     const lastSavedSecondRef = useRef<number | null>(null);
     const isLeavingPageRef = useRef(false);
     const hasCompletedSessionRef = useRef(false);
+    const originalTitleRef = useRef<string | null>(null);
+    const tabAlertIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const tabAlertTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const allChecklist = useMemo(
         () => data.blocks.flatMap((block) => block.checklist),
@@ -236,7 +239,16 @@ export default function PassPage() {
 
 
     useEffect(() => {
+        originalTitleRef.current = document.title;
+
         loadSession();
+
+        return () => {
+            if (originalTitleRef.current) {
+                document.title = originalTitleRef.current;
+            }
+        };
+
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -399,10 +411,46 @@ export default function PassPage() {
 
     function triggerTimerDoneAnimation() {
         setShowTimerDoneAnimation(true);
+        startDoneTabAlert();
 
         setTimeout(() => {
             setShowTimerDoneAnimation(false);
         }, 1800);
+    }
+
+    function stopDoneTabAlert() {
+        if (tabAlertIntervalRef.current !== null) {
+            clearInterval(tabAlertIntervalRef.current);
+            tabAlertIntervalRef.current = null;
+        }
+
+        if (tabAlertTimeoutRef.current !== null) {
+            clearTimeout(tabAlertTimeoutRef.current);
+            tabAlertTimeoutRef.current = null;
+        }
+
+        document.title = originalTitleRef.current || "Studiepass";
+    }
+
+    function startDoneTabAlert() {
+        stopDoneTabAlert();
+
+        const originalTitle = originalTitleRef.current || document.title;
+        let visible = true;
+
+        tabAlertIntervalRef.current = setInterval(() => {
+            document.title = visible ? "🎉 Passet är klart!" : originalTitle;
+            visible = !visible;
+        }, 1000);
+
+        tabAlertTimeoutRef.current = setTimeout(() => {
+            if (tabAlertIntervalRef.current !== null) {
+                clearInterval(tabAlertIntervalRef.current);
+                tabAlertIntervalRef.current = null;
+            }
+
+            document.title = "🎉 Passet är klart!";
+        }, 30000);
     }
 
     async function savePlanning(nextData = data) {
@@ -594,14 +642,36 @@ export default function PassPage() {
     }, [id, sessionStatus]);
 
     useEffect(() => {
+        function pauseWithBeacon() {
+            if (!id) return;
+            if (!isStudyMode) return;
+            if (!isRunning) return;
+            if (hasCompletedSessionRef.current) return;
+            if (isLeavingPageRef.current) return;
+
+            const remaining = getCurrentRemainingSeconds();
+
+            navigator.sendBeacon(
+                "/api/pass/pause",
+                JSON.stringify({
+                    id,
+                    remaining_seconds: remaining,
+                })
+            );
+        }
+
+        window.addEventListener("pagehide", pauseWithBeacon);
+
         return () => {
+            window.removeEventListener("pagehide", pauseWithBeacon);
+
             if (hasCompletedSessionRef.current) return;
 
             if (isStudyMode && isRunning) {
                 pauseSession(false);
             }
         };
-    }, [isStudyMode, isRunning, pauseSession]);
+    }, [id, isStudyMode, isRunning, pauseSession]);
 
     useEffect(() => {
         if (!isStudyMode) return;
@@ -1116,6 +1186,8 @@ export default function PassPage() {
     }
 
     async function extendSession() {
+        stopDoneTabAlert();
+
         if (!id) return;
 
         const addedSeconds = extraMinutes * 60;
@@ -1143,6 +1215,9 @@ export default function PassPage() {
     }
 
     function continueToEndReview() {
+        if (originalTitleRef.current) {
+            document.title = originalTitleRef.current;
+        }
         setShowExtendModal(false);
         openEndModal(plannedMinutes);
     }
