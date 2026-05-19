@@ -23,6 +23,7 @@ export async function POST(request: Request) {
                 status: "paused",
                 remaining_seconds: remainingSeconds,
                 started_at: null,
+                paused_at: new Date().toISOString(),
             })
             .eq("id", body.id);
 

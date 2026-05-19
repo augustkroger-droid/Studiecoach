@@ -381,6 +381,7 @@ export default function PassPage() {
                         remaining_seconds: 0,
                         status: "paused",
                         started_at: null,
+                        paused_at: new Date().toISOString()
                     })
                     .eq("id", id);
 
@@ -532,6 +533,7 @@ export default function PassPage() {
                 status: "active",
                 remaining_seconds: adjustedStartSeconds,
                 started_at: new Date().toISOString(),
+                paused_at: null,
             })
             .eq("id", id);
 
@@ -590,6 +592,7 @@ export default function PassPage() {
                 status: "active",
                 remaining_seconds: remaining,
                 started_at: new Date().toISOString(),
+                paused_at: null,
             })
             .eq("id", id);
 
@@ -629,6 +632,7 @@ export default function PassPage() {
         const updateData: any = {
             remaining_seconds: remaining,
             started_at: null,
+            paused_at: new Date().toISOString(),
         };
 
         if (sessionStatus !== "planned") {
@@ -656,6 +660,7 @@ export default function PassPage() {
                 JSON.stringify({
                     id,
                     remaining_seconds: remaining,
+                    paused_at: new Date().toISOString(),
                 })
             );
         }
@@ -752,6 +757,7 @@ export default function PassPage() {
                 duration: actualMinutes,
                 remaining_seconds: null,
                 started_at: null,
+                paused_at: null,
             })
             .eq("id", id);
 
@@ -795,6 +801,7 @@ export default function PassPage() {
                     status: "active",
                     remaining_seconds: remaining,
                     started_at: new Date().toISOString(),
+                    paused_at: null,
                 })
                 .eq("id", id);
 
@@ -1210,6 +1217,7 @@ export default function PassPage() {
                 remaining_seconds: addedSeconds,
                 status: "active",
                 started_at: new Date().toISOString(),
+                paused_at: null,
             })
             .eq("id", id);
     }
