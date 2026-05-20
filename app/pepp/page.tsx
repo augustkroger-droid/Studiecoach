@@ -362,7 +362,7 @@ function PeppPageContent() {
             return;
         }
 
-        setMyGlobalRank(data?.[0]?.rank ?? null);
+        setMyGlobalRank(data?.[0]?.global_rank ?? null);
     }
 
     async function loadMyWeeklyMinutes(currentUserId: string) {
